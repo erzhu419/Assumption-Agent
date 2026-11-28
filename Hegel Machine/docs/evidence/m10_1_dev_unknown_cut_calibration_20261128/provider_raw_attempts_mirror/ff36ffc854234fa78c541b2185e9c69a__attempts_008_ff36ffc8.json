@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ff36ffc854234fa78c541b2185e9c69a",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__stageS__dev_m101_c01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:54:08.726344+00:00",
+  "ended_at_utc": "2026-11-28T07:54:59.340484+00:00",
+  "request_sha256": "c5810f5b8dcbb1167171f26d7ef004d1198db830392c0fcfe74cfc96bf79ef05",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55843,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36407,
+    "cached_tokens": 10880,
+    "completion_tokens": 2206
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe_links.py <<'PY'\\nimport pickle\\nimport numpy as np\\nfrom itertools import combinations_with_replacement as cr\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; t=s['eval_times']\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef poly(x,d=2):return np.c_[aff(x),*[np.prod(x[:,q],axis=1) for k in range(2,d+1) for q in cr(range(4),k)]]\\ndef fit(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\npa=s['panel_a']; a=aff(pa['u']); v=pa['v']; ii=np.arange(len(v))\\nfor _ in range(6):\\n w=fit(a[ii],v[ii]); rr=np.linalg.norm(a@w-v,axis=1);ii=np.argsort(rr)[:-3]\\nprint('A affine',w,'scale gram',w[1:]@w[1:].T,'tail residuals',np.sort(rr)[-7:]);print('test radii',np.quantile(np.linalg.norm(s['test']['x'],axis=1),[0,.5,.9,1]))\\nF=poly(x);G=poly(x,3);E=-np.expm1(-t[:,None]*[1.52,.22]); Z=z@np.linalg.pinv(E).T; R=np.sum(x*x,axis=1)\\nsplits=list(np.array_split(np.arange(len(x)),6))+[np.argsort(R)[-12:]]\\nys={}; zs={}\\nfor j in splits:\\n i=np.setdiff1d(np.arange(len(x)),j); xa=x[i]; ya=y[i]; f=F[i]; g=G[i]; r=R[i]; p=fit(f,ya);h=np.zeros((4,4))\\n for (a,b),c in zip(cr(range(4),2),p[5:]):h[a,b]=h[b,a]=c*(1 if a==b else .5)\\n val,vec=np.linalg.eigh(h);v=vec[:,-1]; lin=p[1:5]\\n def add(name,pred):ys.setdefault(name,[]).append(np.mean(abs(y[j]-pred)))\\n for name,fn in {'sin':np.sin,'tanh':np.tanh,'asinh':np.arcsinh,'rat':lambda u:u/(1+u*u),'cubic':lambda u:u**3,'softabs':lambda u:u/(1+abs(u)),'exp':lambda u:np.exp(np.clip(u,-10,8))}.items():\\n  for typ in ('radial','quadratic','mixed'):\\n   def features(q,xx,ff,rr):\\n    u=q[0]+xx@q[1:5]\\n    if typ=='mixed':u=u+q[5]*rr\\n    return np.c_[ff if typ=='quadratic' else np.c_[aff(xx),rr],fn(u)]\\n   starts=[np.r_[bias,d*scale,0.] for d in (v,lin/np.linalg.norm(lin)) for scale in (.5,1.4) for bias in (0.,.6)]\\n   def residual(q):\\n    h=features(q,xa,f,r); return h@fit(h,ya)-ya\\n   sol=min((least_squares(residual,q,bounds=(-5,5),max_nfev=85) for q in starts),key=lambda sol:sol.cost)\\n   h=features(sol.x,xa,f,r);add((name,typ),features(sol.x,x[j],F[j],R[j])@fit(h,ya))\\n for typ in ('tanh','rad-den','link-den','link-den-quad','logistic','sinh','softabs'):\\n  def fn(q,xx,ff,rr):\\n   base=ff@q[:15]; sc=q[15]\\n   if typ=='tanh':return (np.tanh(sc*base)/sc if sc>1e-8 else base)\\n   if typ=='sinh':return (np.sinh(np.clip(sc*base,-6,6))/sc if sc>1e-8 else base)\\n   if typ=='logistic':return q[16]+(np.tanh(sc*base)/sc if sc>1e-8 else base)\\n   if typ=='rad-den':return base/(1+sc*rr)\\n   if typ=='softabs':return base/(1+sc*abs(base))\\n   den=q[16]+xx@q[17:21]; num=base\\n   if typ=='link-den-quad':den=den+sc*rr\\n   return num/(1+den*den)\\n  starts=[np.r_[p,.2,0.,scale*d] for d in (v,lin/np.linalg.norm(lin)) for scale in (.15,.55)]\\n  sol=min((least_squares(lambda q:fn(q,xa,f,r)-ya,q,bounds=(np.r_[np.repeat(-10.,15),0.,np.repeat(-5.,5)],np.repeat(10.,21)),max_nfev=100) for q in starts),key=lambda sol:sol.cost)\\n  add(typ,fn(sol.x,x[j],F[j],R[j]))\\n # Time coefficient regularization and supervised response features, using only fitted scalar values at validation time.\\n D=cdist(x,x,'sqeuclidean'); k=(1+np.sqrt(5*D)/3+5*D/27)*np.exp(-np.sqrt(5*D)/3)+F@F.T\\n yp=k[np.ix_(j,i)]@np.linalg.solve(k[np.ix_(i,i)]+.0002*np.eye(len(i)),ya)\\n for weights in [(1,0),(1,.05),(1,.3),(1,1),(1,3)]:\\n  for extra in (False,True):\\n   dev=np.c_[F[i],ya,xa*ya[:,None]] if extra else F[i]; test=np.c_[F[j],yp,x[j]*yp[:,None]] if extra else F[j]\\n   h=dev@dev.T+weights[1]*(k-F@F.T)[np.ix_(i,i)]; hh=test@dev.T+weights[1]*(k-F@F.T)[np.ix_(j,i)]; pred=(hh@np.linalg.solve(h+(.00003 if weights[1] else .001)*np.eye(len(i)),Z[i]))@E.T\\n   err=abs(z[j]-pred);zs.setdefault((weights[1],extra),[]).append([err.mean(),err[:,-1].mean(),err.mean(0).max()])\\n for length,noise in [(2,.0001),(1.4,.001)]:\\n  k=F@F.T+np.exp(-D/(2*length**2));add(('rbf',length,noise), k[np.ix_(j,i)]@np.linalg.solve(k[np.ix_(i,i)]+noise*np.eye(len(i)),ya))\\nfor name,e in sorted(ys.items(),key=lambda r:np.mean(r[1][:-1])+.7*max(r[1]))[:20]:print('y',name,np.round(e,5),np.mean(e[:-1]),max(e))\\nfor name,e in zs.items():\\n a=np.array(e);print('traj',name,'average',a[:-1].mean(0).round(5),'worst',a.max(0).round(5),'radius',a[-1].round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_links.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic smooth correction → H2 compact radial or single-index response links with separate temporal amplitudes; current screened worst-slice MAEs are 0.0220 for y and 0.0220 at the worst horizon.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select one kernel for both outputs\",\n      \"rejected_reason\": \"The radial-basis screen favored scalar prediction, while the Matérn kernel gave better worst-horizon error.\"\n    }\n  ],\n  \"rationale\": \"The scalar quadratic has three similar negative eigenvalues and one positive eigenvalue. Test whether radial and single-index links explain that structure and improve held-out error. Keep the kernel references so a structural model is promoted only if it holds up on the high-radius slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "5b1092a8d32f602e923422594eac18d4d86c1b66d37e930d5503cd409d9fac03",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 55438.08,
+      "usage_known": true,
+      "prompt_tokens": 36407,
+      "cached_tokens": 10880,
+      "completion_tokens": 2206
+    }
+  ]
+}

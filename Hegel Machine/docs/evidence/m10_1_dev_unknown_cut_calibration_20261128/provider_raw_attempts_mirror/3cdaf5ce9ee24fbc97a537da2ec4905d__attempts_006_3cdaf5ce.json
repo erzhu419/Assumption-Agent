@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3cdaf5ce9ee24fbc97a537da2ec4905d",
+  "call_seq": 6,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__stageS__dev_m101_c01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:52:19.050556+00:00",
+  "ended_at_utc": "2026-11-28T07:52:51.745908+00:00",
+  "request_sha256": "eeb013216443e089a64a23d9c44f464d78d823e216b2131015f45c2b4f9875b8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41846,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29783,
+    "cached_tokens": 10880,
+    "completion_tokens": 1313
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe_latent.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement as cr\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];t=s['train'];x=t['x'];Y=np.c_[t['y'],t['traj']];T=s['eval_times'];np.set_printoptions(precision=4,suppress=True,linewidth=140)\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef fit(X,y):return np.linalg.lstsq(X,y,rcond=None)[0]\\ndef pol(x,d):return np.c_[aff(x),*[np.prod(x[:,i],1) for k in range(2,d+1) for i in cr(range(4),k)]]\\nE=np.c_[-np.expm1(-1.52*T),-np.expm1(-.22*T)]; C=Y[:,1:]@np.linalg.pinv(E).T; Z=np.c_[Y[:,0],C];\\nfor j in range(3):\\n w=fit(pol(x,3),Z[:,j]);H=np.zeros((4,4));\\n for (i,k),v in zip(cr(range(4),2),w[5:15]):H[i,k]=H[k,i]=v*(1 if i==k else .5)\\n print('target',j,'aff',w[:5],'Hessian',(np.linalg.eigh(H)))\\n print('cubic singular values',np.linalg.svd(np.array([[[w[15+list(cr(range(4),3)).index(tuple(sorted((i,k,l))))]/(1 if i==k==l else 3 if len({i,k,l})==2 else 6) for l in range(4)]for k in range(4)]for i in range(4)]).reshape(4,16),compute_uv=False))\\nprint('C, y corr',np.corrcoef(Z.T));print('telemetry',s['telemetry_vec'])\\n# Fit low-rank quadratic with ridge nonlinearities. A small number of ridge directions\\n# is a falsifiable alternative to fitting all cubic coefficients independently.\\nF=pol(x,2); W=fit(F,Z);P=np.linalg.pinv(F); R=Z-F@W\\nfun={'cubic':lambda a:a**3,'sin':lambda a:np.sin(a)-a,'tanh':lambda a:np.tanh(a)-a,'asinh':lambda a:np.arcsinh(a)-a,'rat':lambda a:a/(1+a*a)-a,'cos':lambda a:np.cos(a)-1+.5*a*a}\\nrng=np.random.default_rng(31)\\nfor name,f in fun.items():\\n for n in (1,2,3):\\n  for j in (0,1,2):\\n   def design(q,z):return np.c_[pol(z,2),f(z@q.reshape(n,5)[:,:4].T+q.reshape(n,5)[:,4])]\\n   scores=[];params=[]\\n   for I,J in [(np.arange(56),np.arange(56,72)),(np.arange(16,72),np.arange(16))]:\\n    def res(q):\\n     a=design(q,x[I]);return a@fit(a,Z[I,j])-Z[I,j]\\n    rs=[least_squares(res,np.c_[rng.normal(size=(n,4))*.6,np.zeros(n)].ravel(),max_nfev=130) for _ in range(3)]\\n    r=min(rs,key=lambda r:r.cost); a=design(r.x,x);scores.append(np.mean(abs(a[J]@fit(a[I],Z[I,j])-Z[J,j])));params.append(r.x.reshape(n,5))\\n   if max(scores)<(.019 if j==0 else .050):print(name,n,j,np.array(scores),params[0])\\n# Scores of the reference quadratic/cubic on the same latent amplitudes.\\nfor d in (2,3):\\n for I,J in [(np.arange(56),np.arange(56,72)),(np.arange(16,72),np.arange(16))]:\\n  a=pol(x,d);print('baseline latent',d,np.mean(abs(a[J]@fit(a[I],Z[I])-Z[J]),axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_latent.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 composed panel features → H2 a low-dimensional nonlinear correction to quadratic latent amplitudes; the raw cubic baseline has 0.01394 scalar tail MAE and 0.01911 final-horizon tail MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the best panel composition from the tail screen\",\n      \"rejected_reason\": \"The screen compared many compositions on one split, and no composition improved scalar MAE over the cubic baseline.\"\n    }\n  ],\n  \"rationale\": \"Inspect the quadratic and cubic coefficient structure and test compact nonlinear corrections on two opposing holdouts. If the same family improves both, carry it into blocked validation; otherwise retain regularized smooth candidates.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "b022049913275a0196568094d2fd7722ad3f1b7baa951eb1fe9b7b92aa14d656",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35062.5,
+      "usage_known": true,
+      "prompt_tokens": 29783,
+      "cached_tokens": 10880,
+      "completion_tokens": 1313
+    }
+  ]
+}

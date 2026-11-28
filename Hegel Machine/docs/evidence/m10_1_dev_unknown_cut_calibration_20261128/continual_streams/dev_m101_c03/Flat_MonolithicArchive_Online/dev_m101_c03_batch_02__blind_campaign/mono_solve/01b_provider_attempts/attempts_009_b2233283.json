@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b223328341994406918856f44768bbc3",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Flat_MonolithicArchive_Online__dev_m101_c03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:08:03.290367+00:00",
+  "ended_at_utc": "2026-11-28T08:08:38.979742+00:00",
+  "request_sha256": "1f3c42b0bd94cc4b0addee101638cad8b0161e66fb439230b6ad990ee8efc5c9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59615,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33903,
+    "cached_tokens": 9344,
+    "completion_tokens": 1402
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text(); start=s.index('def _fit_modes'); stop=s.index('    return {',start)\\ns=s[:start]+'''def _fit_modes(slow, fast, t, y):\\n    \\\"\\\"\\\"Fit a shared slow driver with a small contribution to the fast rise.\\\"\\\"\\\"\\n    def profile(params):\\n        bs, bf = _time_basis(t, params[:2]).T\\n        x = np.column_stack((\\n            (slow[:, None, :] * (bs + params[2] * bf)[None, :, None]).reshape(y.size, slow.shape[1]),\\n            (fast[:, None, :] * bf[None, :, None]).reshape(y.size, fast.shape[1]),\\n        ))\\n        coef = _fit(x, y.ravel())\\n        return x @ coef - y.ravel(), coef\\n\\n    params = least_squares(lambda p: profile(p)[0], [0.42, 1.8, 0.1],\\n                           bounds=([0.08, 1., -0.5], [0.9, 3., 0.5])).x\\n    _, coef = profile(params)\\n    bs, bf = _time_basis(t, params[:2]).T\\n    return np.vstack((bs + params[2] * bf, bf)), np.split(coef, [slow.shape[1]])\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    a, b, dot, cross = _features(study, np.vstack((train['x'], study['test']['x'])))\\n    endpoint = _offset_column(np.column_stack((a, b, dot)))\\n    slow = np.column_stack((b, cross))\\n    fast = np.column_stack((a, dot))\\n    y = endpoint[n:] @ _fit(endpoint[:n], train['y'])\\n    basis, (cs, cf) = _fit_modes(slow[:n], fast[:n], study['eval_times'], train['traj'])\\n    state = np.column_stack((slow[n:] @ cs, fast[n:] @ cf)) @ basis\\n'''+s[stop:];p.write_text(s)\\nPY\\ncat > /tmp/verify_final.py <<'PY'\\nexec(open('/tmp/test_solver.py').read().split(\\\"print('endpoint coefficients'\\\")[0])\\nix=np.arange(len(y)); o,g=m._calibration(s['panel_a']); z=(r['x']-o)/g\\nsplits=[('ordered',ix)]+[(f'random{k}',np.random.default_rng(k).permutation(len(y))) for k in range(10)]+[('high amplitude',np.argsort(np.max(abs(z),axis=1)))]+[(f'axis{k} sign tail {q}',np.argsort(q*z[:,k])) for k in range(4) for q in (-1,1)]\\nvals=[]\\nfor name,p in splits:\\n i,j=p[:56],p[56:]; result=m.solve_batch(dict(s,train={k:r[k][i] for k in ['x','y','traj']},test={'x':r['x'][j]})); ey=abs(result['y_hat']-y[j]); es=abs(result['state_pred']-Y[j]); scores=[ey.mean(),es.mean(),es.mean(0).max(),es[:,-1].mean()]; vals.append(scores)\\n if name in ('ordered','high amplitude'): print(name,np.round(scores,7))\\n if name=='ordered':\\n  additive=aff(np.c_[A,B]); ys=additive[j]@m._fit(additive[i],y[i]); ss,ff=B,A; ba,(cs,cf)=m._fit_modes(ss[i],ff[i],T,Y[i]); st=np.c_[ss[j]@cs,ff[j]@cf]@ba\\n  print('interaction ablation ordered',np.mean(abs(ys-y[j])),np.mean(abs(st-Y[j])))\\nv=np.array(vals); print('worst original slices',v[:12].max(0)); print('worst all slices',v.max(0),[splits[k][0] for k in v.argmax(0)])\\nassert np.all(v.max(0)<0.009)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_final.py && python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: independent modal weights → H2: a shared slow driver with weak fast-mode coupling; worst trajectory MAE improves from 0.004358 to 0.004325 across the original splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fix the rates at 0.42 and 1.82\",\n      \"rejected_reason\": \"Fixed rates slightly improve aggregate error but worsen worst-timestamp and high-amplitude terminal error; fitting the rates also avoids treating full-data estimates as independent priors.\"\n    }\n  ],\n  \"rationale\": \"Share the modal weights because the coupled fit improves average and worst-slice trajectory error with fewer parameters. The final isolated check will test directional extrapolation and compare against an additive ablation; if the coupled fit fails on a directional tail, compare that slice against the verified independent fit before promoting it.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "64144c3ebd2f4793518fb22bba9553381cbfe175b2dbdc151502ce170f1cfe41",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38221.89,
+      "usage_known": true,
+      "prompt_tokens": 33903,
+      "cached_tokens": 9344,
+      "completion_tokens": 1402
+    }
+  ]
+}

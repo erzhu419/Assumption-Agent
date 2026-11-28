@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aa68d4ff676243f0b124a660e7c6f04c",
+  "call_seq": 4,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Fixed_TwoStage_Modular_Online__dev_m101_c01_batch_04__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:07:39.288465+00:00",
+  "ended_at_utc": "2026-11-28T08:08:23.476416+00:00",
+  "request_sha256": "12958e7bcfebd969f46075c6be241de2606aab5c3360977603392005a7e4c17b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30096,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22138,
+    "cached_tokens": 9344,
+    "completion_tokens": 1675
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe04.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; t=s['eval_times']; q=s['test']['x']; n=len(x)\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\ndef fitpanel(p,key):\\n u=aff(p['u']); v=p[key]; rng=np.random.default_rng(11)\\n def score(w): return np.sum(np.sort(np.sum((u@w-v)**2,axis=1))[:int(.75*len(u))])\\n w=min([np.linalg.lstsq(u,v,rcond=None)[0]]+[np.linalg.lstsq(u[i],v[i],rcond=None)[0] for i in (rng.choice(len(u),7,False) for _ in range(400))],key=score)\\n for _ in range(6):\\n  err=np.linalg.norm(u@w-v,axis=1); keep=err<max(5*np.median(err),.001); w=np.linalg.lstsq(u[keep],v[keep],rcond=None)[0]\\n return w,err,keep\\nA,err,keep=fitpanel(s['panel_a'],'v'); B,_,_=fitpanel(s['panel_b'],'v'); print('A=',A,'err',np.sort(err),'Gram',A[1:]@A[1:].T,'B',B,sep='\\\\n')\\ndef poly(x,k):return np.column_stack([np.prod(x[:,i],axis=1) for j in range(k+1) for i in combinations_with_replacement(range(x.shape[1]),j)])\\ndef expbasis(r):return -np.expm1(-t*r)\\ndef timepred(p):\\n f=expbasis(p[0]); a=z@f/(f@f); return a,f\\nr=least_squares(lambda p:(z-np.outer(*timepred(p))).ravel(),[1.]).x; a,f=timepred(r); print('rate',r,'residual rms by time',np.mean((z-np.outer(a,f))**2,axis=0)**.5)\\nfor i in np.argsort(abs(a))[-12:]:\\n rr=least_squares(lambda p:z[i]-expbasis(p[0])*(z[i]@expbasis(p[0]))/sum(expbasis(p[0])**2),r).x[0]; print('amp/rate/raw/cal',round(a[i],4),round(rr,4),np.round(x[i],3),np.round(aff(x)[i]@A,3))\\ncoords={'raw':x,'A':aff(x)@A,'B':aff(x)@B,'AB':aff(aff(x)@A)@B}\\ntry:coords['invA']=(x-A[0])@np.linalg.inv(A[1:])\\nexcept np.linalg.LinAlgError:pass\\nfor name,u in coords.items():\\n print('corr',name,np.corrcoef(np.c_[y,a,u].T)[:2,2:]);\\n for k in [1,2,3]:\\n  F=poly(u,k); W=np.linalg.lstsq(F[:56],np.c_[y,a][:56],rcond=None)[0]; e=np.abs(F@W-np.c_[y,a]);\\n  print('poly',name,k,e[:56].mean(0),e[56:].mean(0))\\n if name!='raw' and name!='A':continue\\n for Y in [y,a]:\\n  F=poly(u,2); T=F[:56]; yy=Y[:56]; results=[]\\n  for kind in ['single','rad','diag','full','rad2','mult','tanh']:\\n   H=aff(u) if kind in ('single','mult','tanh','rad2') else np.c_[aff(u),np.sum(u*u,axis=1)] if kind=='rad' else np.c_[aff(u),u*u] if kind=='diag' else F\\n   m=H.shape[1]+(kind in ('rad2','mult')); reg=np.r_[np.full(5,.0006),np.full(m-5,.015)]; R=np.sum(u*u,axis=1)\\n   def factor(p):\\n    g=H@p[:H.shape[1]]\\n    if kind=='rad2':return 1/(1+g*g+np.exp(p[-1])*R)\\n    if kind=='mult':return 1/((1+g*g)*(1+np.exp(p[-1])*R))\\n    if kind=='tanh':return np.tanh(g)/np.where(abs(g)>.00001,g,1e-5)+(abs(g)<=.00001)\\n    return 1/(1+g*g)\\n   def residual(p,ret=False):\\n    fac=factor(p); D=T*fac[:56,None]; w=np.linalg.lstsq(D,yy,rcond=None)[0]; return (F@w)*fac if ret else np.r_[D@w-yy,reg*p]\\n   rng=np.random.default_rng(32); starts=rng.normal(0,.3,(6,m));\\n   if kind in ('rad2','mult'):starts[:,-1]=-2\\n   sol=min([least_squares(residual,p,bounds=(-9,9),max_nfev=110) for p in starts],key=lambda v:v.cost); e=np.abs(residual(sol.x,True)-Y); results.append((kind,round(e[:56].mean(),5),round(e[56:].mean(),5),np.round(sol.x,3).tolist()))\\n  print('rational',name,'y' if Y is y else 'amp',results)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe04.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (monolithic fallback) -> H2 (trimmed affine calibration, shared temporal response, and rational scalar readout); incumbent 56/16 MAE is 0.043282 for y and 0.008709 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived scalar ensemble unchanged\",\n      \"rejected_reason\": \"The current campaign's fallback failed the scalar gate; the calibration and denominator structure should be tested before committing to another ensemble.\"\n    }\n  ],\n  \"rationale\": \"Trim panel A to determine whether its large residuals are contamination or model misspecification. Compare polynomial and rational readouts on the same 56/16 split, and use trajectory residuals to decide whether a shared rate suffices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "008c3dc24b5db36585c8172e8a3c156d6819377d04632e2e1a6a514db007b28e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46577.82,
+      "usage_known": true,
+      "prompt_tokens": 22138,
+      "cached_tokens": 9344,
+      "completion_tokens": 1675
+    }
+  ]
+}

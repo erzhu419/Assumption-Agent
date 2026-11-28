@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ead3cf8fc09e4b7abea92f827c93c025",
+  "call_seq": 1,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Hegel_UnknownCut_GraphDiscovery_Online__init_decomp_dev_m101_c04_batch_01",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:58:02.105380+00:00",
+  "ended_at_utc": "2026-11-28T07:58:39.367475+00:00",
+  "request_sha256": "d9383660fce192a26a7ae78d8e5b61e24b4cfe29601ea2cf5054222ea3a4b602",
+  "system_prompt_chars": 2229,
+  "stdin_payload_chars": 4917,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 13094,
+    "cached_tokens": 0,
+    "completion_tokens": 1427
+  },
+  "raw_response_text": "{\n  \"action\": \"extract_module\",\n  \"rationale\": \"Extract the shared coordinate stage: it fits and inverts panel_a, then applies the affine map fitted on panel_b to both train and test inputs. The sink preserves the original scalar and trajectory readouts. The panel_a and panel_b summaries still support affine fits on the target, while scalar output spread and telemetry channel 3 shift; those summaries do not identify the failing stage. The source does not use panel_c, so the graph adds no panel_c stage. The extraction preserves the source computations, but Docker parity has not been run.\",\n  \"nodes\": [\"node_00\", \"node_01\"],\n  \"edges\": [[\"__input__\", \"node_00\"], [\"__input__\", \"node_01\"], [\"node_00\", \"node_01\"]],\n  \"sink_node_id\": \"node_01\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibration(study):\\n    a = study['panel_a']\\n    u, v = a['u'], a['v']\\n    i, j = np.triu_indices(len(u), 1)\\n    coeff = []\\n    for x, y in zip(u.T, v.T):\\n        dx = x[i] - x[j]\\n        good = dx != 0\\n        gain = np.median((y[i] - y[j])[good] / dx[good])\\n        offset = np.median(y - gain * x)\\n        err = np.abs(y - offset - gain * x)\\n        keep = err <= max(0.001, 5 * np.median(err))\\n        coeff.append(_ls(_affine(x[keep]), y[keep]))\\n    offset, gain = np.asarray(coeff).T\\n    b = study['panel_b']\\n    mixing = _ls(_affine(b['u']), b['v'])\\n    return offset, gain, mixing\\n\\n\\ndef _coordinates(x, calibration):\\n    offset, gain, mixing = calibration\\n    return _affine((x - offset) / gain) @ mixing\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    calibration = _calibration(study)\\n    return {'z_tr': _coordinates(study['train']['x'], calibration),\\n            'z_te': _coordinates(study['test']['x'], calibration)}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _cross(z):\\n    return z[:, 0] * z[:, 2] + z[:, 1] * z[:, 3]\\n\\n\\ndef _relaxation(design, trajectories, times):\\n    q, r = np.linalg.qr(design, mode='reduced')\\n    projected = q.T @ trajectories\\n\\n    def basis(log_rates):\\n        return -np.expm1(-times[:, None] * np.exp(log_rates))\\n\\n    def residual(log_rates):\\n        b = basis(log_rates)\\n        return (b @ _ls(b, projected.T) - projected.T).ravel()\\n\\n    result = least_squares(residual, np.log([0.4, 1.8]),\\n                           bounds=(np.log(0.03), np.log(15.0)))\\n    b = basis(result.x)\\n    weights = _ls(r, _ls(b, projected.T).T)\\n    return weights @ b.T\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train = study['train']\\n    z = inputs['node_00']['z_tr']\\n    z_test = inputs['node_00']['z_te']\\n    design, test_design = _affine(z), _affine(z_test)\\n    w = _ls(np.column_stack((z, _cross(z))), train['y'])\\n    y_hat = np.column_stack((z_test, _cross(z_test))) @ w\\n    state_pred = test_design @ _relaxation(design, train['traj'], study['eval_times'])\\n    final_state = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(),\\n                                         final_state.mean(), final_state.std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "d4981f6b4be3a0dd7d792025291ac34b4f84e8f4dba55df6d683b9979dd3a646",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39714.3,
+      "usage_known": true,
+      "prompt_tokens": 13094,
+      "cached_tokens": 0,
+      "completion_tokens": 1427
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d8d11b247f744cee8855a862838b7a70",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__stageS__dev_m101_c03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:53:22.096398+00:00",
+  "ended_at_utc": "2026-11-28T07:53:58.209141+00:00",
+  "request_sha256": "f5153bf01ef42a838e838f37dc68bb54797997e94349309513478731b024c658",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51886,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34212,
+    "cached_tokens": 10880,
+    "completion_tokens": 1578
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/graph.py <<'PY'\\nimport numpy as np,pickle,itertools as it\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom sklearn.linear_model import Ridge\\nsrc=open('/tmp/campaign.py').read();exec(src[:src.index(\\\"u=s['panel_c']\\\")]);\\nx,y,q=[s['train'][k] for k in ('x','y','traj')]; t=s['eval_times'];a=calfit(s['panel_a']); z=(x-a[:,0])/a[:,1]; p=s['panel_c'];u=p['u']\\ndef panel_fit(u,v,which,kind):\\n def phi(z,p): return .45*z+np.tanh(p*z) if which==1 else z+p*z*z\\n def fit(par):\\n  f=phi(u,par); fm=f.mean(0); vm=v.mean(0); fc=f-fm; vc=v-vm\\n  if kind=='aff': c=ls(fc,vc)\\n  else:\\n   U,D,V=np.linalg.svd(fc.T@vc); c=(U@V)*D.sum()/np.sum(fc**2)\\n  d=vm-fm@c\\n  return lambda z:phi(z,par)@c+d,c,d\\n p0=2.2 if which==1 else .45\\n par=p0 if kind=='fixed' else least_squares(lambda k:(fit(k[0])[0](u)-v).ravel(),[p0],bounds=(.1,4)).x[0]\\n f,c,d=fit(par);return f,(par,c,d)\\ndef amps(q):\\n def f(p):return -np.expm1(-t[:,None]*p)\\n def e(p):\\n  F=f(p);return (F@ls(F,q.T)-q.T).ravel()\\n rates=least_squares(e,[1.8,.4],bounds=(.015,10)).x;F=f(rates); return F,ls(F,q.T).T,rates\\nF,Y,rates=amps(q);print('rates',rates);Y=np.c_[y,Y];\\nfor j in [1,2]:\\n v=p[f'v{j}']; jj=np.arange(len(u))\\n for kind in ['aff','orth','fixed']:\\n  f,k=panel_fit(u,v,j,kind); print('panel',j,kind,'par',k[0], 'sv',np.linalg.svd(k[1],compute_uv=False),'rms',rms(f(u)-v),'fold', [round(rms(panel_fit(u[jj%4!=k],v[jj%4!=k],j,kind)[0](u[jj%4==k])-v[jj%4==k]),5) for k in range(4)])\\na=panel_fit(u,p['v1'],1,'orth')[0](z);b=panel_fit(u,p['v2'],2,'orth')[0](z)\\nP=PolynomialFeatures(2);zz=np.c_[a,b];M=P.fit_transform(zz);names=P.get_feature_names_out(['a','b','c','d','e','f','g','h']);\\nmodels={};models['linear']=M[:,:9];models['sameprod']=np.c_[M[:,:19],b,a*b];models['prev']=aff(np.c_[a,a*a,pair(a),b,a*b]);models['bothquad']=M;models['splitquad']=aff(np.c_[a,b,a*a,pair(a),b*b,pair(b)]);\\nfolds=[]\\nfor k in range(6):\\n va=np.arange(len(x))%6==k;tr=~va;Tf,Yf,_=amps(q[tr]);folds.append((va,tr,Tf,np.c_[y[tr],Yf]))\\nfor name,m in models.items():\\n for alpha in [0,.00003,.0003,.003,.03]:\\n  ee=[]\\n  for va,tr,Tf,Yf in folds:\\n   h=m[va]@ls(m[tr],Yf) if alpha==0 else Ridge(alpha=alpha).fit(m[tr],Yf).predict(m[va]);ee.append(np.mean(abs(np.c_[h[:,0]-y[va],h[:,1:]@Tf.T-q[va]]),0))\\n  ee=np.array(ee);print(name,alpha,np.round([ee[:,0].mean(),ee[:,1:].mean(),ee[:,0].max(),ee[:,1:].max()],5))\\nfor name,m,ns in [('prev',models['prev'],['1','a','b','c','d','a2','b2','c2','d2','ab','ac','ad','bc','bd','cd','e','f','g','h','ae','bf','cg','dh']),('bothquad',M,names)]:\\n co=Ridge(alpha=.0002,fit_intercept=False).fit(m,Y).coef_.T;print(name,'coefficients',np.c_[ns,np.around(co,4)],'rms',np.std(m@co-Y,0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated tanh surrogate → H2 inverse-A calibration followed by both panel-C outputs and their products; worst six-fold MAEs are 0.0114 for y and 0.0324 across trajectory horizons.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Insert panel B after inverse A\",\"rejected_reason\":\"With the same dual-C interaction features, forward B raised worst trajectory-horizon MAE from 0.0324 to 0.1633.\"}],\"rationale\":\"The fitted C coefficients suggest scaled orthogonal mixing of elementwise nonlinearities. Test that restriction on held-out panel rows, then compare matched and unrestricted products to see whether the readout can be reduced to a smaller, more accurate expression.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "e6fceb54b20ae4b613bea45c854b2b712bf67d6ae18735028142c2c51737a8ef",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41023.76,
+      "usage_known": true,
+      "prompt_tokens": 34212,
+      "cached_tokens": 10880,
+      "completion_tokens": 1578
+    }
+  ]
+}

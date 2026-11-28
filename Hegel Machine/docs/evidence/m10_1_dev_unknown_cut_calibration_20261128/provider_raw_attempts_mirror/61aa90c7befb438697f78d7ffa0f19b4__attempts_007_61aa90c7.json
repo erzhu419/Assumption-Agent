@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "61aa90c7befb438697f78d7ffa0f19b4",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Fixed_TwoStage_Modular_Online__dev_m101_c01_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:01:32.900826+00:00",
+  "ended_at_utc": "2026-11-28T08:02:15.128090+00:00",
+  "request_sha256": "3a8c17582333d3c57fd7b1be6ec722349eb07339fabe465c23cd1913c4a8739e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47795,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31636,
+    "cached_tokens": 9344,
+    "completion_tokens": 1702
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/^ops=/,$d' /tmp/graph_scan.py > /tmp/branch_scan.py\\ncat >> /tmp/branch_scan.py <<'PY'\\nfrom scipy.linalg import eigh\\nrng=np.random.default_rng(22); folds=[np.arange(56,72),*np.array_split(rng.permutation(n),5)]\\ndef errors(K,lam):\\n r=[]\\n for j in folds:\\n  i=np.setdiff1d(np.arange(n),j); e=np.abs(K[np.ix_(j,i)]@solve(K[np.ix_(i,i)]+lam*np.eye(len(i)),Y[i],assume_a='pos')-Y[j]);r.append([e[:,0].mean(),e[:,1:].mean()])\\n return np.array(r)\\nops={'a':lambda q:(q-A[0])/np.diag(A[1:]),'A':lambda q:a(q)@A,'B':lambda q:a(q)@B,'b':lambda q:(q-B[0])@np.linalg.inv(B[1:])}\\nframes={'x':x,**{k:f(x) for k,f in ops.items()}}\\nframes.update({k+l:g(f(x)) for k,f in ops.items() for l,g in ops.items() if k.lower()!=l.lower()})\\nres=[]\\nfor name,q in frames.items():\\n P=poly(q); Q=np.linalg.qr(P)[0]; D=Y-Q@(Q.T@Y)\\n candidates={'C1':C1(q),'C2':C2(q),'W1':W1(q),'W2':W2(q),'W1W2':np.c_[W1(q),W2(q)]}\\n for lab,g in list(candidates.items())[:4]:\\n  candidates[lab+'x']=np.einsum('ni,nj->nij',q,g).reshape(n,-1)\\n  for alpha in [-1,-.5,.3,.6,1,2]: candidates[lab+str(alpha)]=poly(q+alpha*g)\\n for lab,g in candidates.items():\\n  g=g-Q@(Q.T@g); scale=np.linalg.norm(g)/np.sqrt(n)\\n  if scale<1e-12:continue\\n  Gn=g/scale\\n  for lam in [.003,.03,.3]:\\n   r=errors(P@P.T+Gn@Gn.T,lam);res.append((name,lab,lam,r))\\nfor k in range(2):\\n print('top branch fits',k)\\n for name,lab,lam,r in sorted(res,key=lambda r:r[-1][:,k].mean())[:8]:print(name,lab,lam,np.round(r[:,k],5))\\n_,S,V=np.linalg.svd(Y[:,1:],full_matrices=False); Z=Y[:,1:]@V[:2].T; print('y/amp corr',np.corrcoef(np.c_[Y[:,0],Z].T));\\nfor label,Q in [('amp',poly(Z)),('x+amp',poly(np.c_[x,Z])),('xquad+amp',np.c_[poly(x),Z]),('x+ampquad',np.c_[a(x),poly(Z)]),('xquad',poly(x))]:\\n r=errors(Q@Q.T,1.e-4);print(label,'observed amp scalar MAE',np.round(r[:,0],5))\\n# Fit temporal modes with candidate physical functions; measures representational floor.\\nt=s['eval_times']; z=Y[:,1:]; exp=np.exp\\nF={'t':lambda p:t,'t2':lambda p:t*t,'relax':lambda p:-np.expm1(-p[2]*t),'sind':lambda p:exp(-p[0]*t)*np.sin(p[1]*t),'cosd0':lambda p:1-exp(-p[0]*t)*np.cos(p[1]*t),'saturate_sin':lambda p:(1-exp(-p[0]*t))*np.sin(p[1]*t),'log':lambda p:np.log1p(p[2]*t),'td':lambda p:t*exp(-p[2]*t),'rampcos':lambda p:t*(1-np.cos(p[2]*t))}\\nfor a1 in ['sind','cosd0','saturate_sin']:\\n for a2 in F:\\n  if a1==a2:continue\\n  def fun(p):\\n   P=np.column_stack((F[a1](p),F[a2](p)));return (P@np.linalg.lstsq(P,z.T,rcond=None)[0]-z.T).ravel()\\n  fit=least_squares(fun,[.2,1.2,.2],bounds=([0,.1,.0001],[5,6,5]),max_nfev=100); ma=np.mean(abs(fit.fun));\\n  if ma<.0045:print(a1,a2,np.round(fit.x,6),round(ma,6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/branch_scan.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (quadratic readouts of serial panel compositions) -> H2 (parallel panel corrections or shared latent readouts); the latest scan's best-mean scalar and trajectory candidates had worst-fold MAEs of 0.05023 and 0.01068, respectively.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The tested serial compositions of nonlinear panel C with a quadratic readout explain the target residuals.\",\"empirical_witness\":\"No panel-C composition appeared among the top 15 candidates for either output; the best mean errors were about 0.0392 for scalar and 0.0082 for trajectory and used affine or raw coordinates.\",\"causal_blanket_diagnosis\":\"Accurate panel calibration does not establish that a panel is active in a target readout; serial replacement of the coordinates could also omit a parallel pathway.\",\"sublated_pivot\":\"Retain the affine-coordinate controls and test panel outputs as residual branches, their interactions, and the scalar's dependence on the two trajectory modes.\",\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep searching serial operator orderings\",\"rejected_reason\":\"The tested serial orderings consistently lost to the affine controls; a parallel correction is a distinct, testable hypothesis.\"}],\"rationale\":\"Use the same held-out rows to test whether nonlinear panel features explain residuals beyond a quadratic baseline. Check the temporal representation separately so a better state basis is not mistaken for a better spatial predictor.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f4b08fd59fdea5142a08756fd7929b7cb308a3143f68a7015671625be869b9cc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44748.92,
+      "usage_known": true,
+      "prompt_tokens": 31636,
+      "cached_tokens": 9344,
+      "completion_tokens": 1702
+    }
+  ]
+}

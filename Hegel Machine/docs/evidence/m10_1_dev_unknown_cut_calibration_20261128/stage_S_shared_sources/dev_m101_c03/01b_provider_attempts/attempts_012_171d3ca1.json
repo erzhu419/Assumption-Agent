@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "171d3ca105344dacb78011919c37247b",
+  "call_seq": 12,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__stageS__dev_m101_c03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:56:28.859415+00:00",
+  "ended_at_utc": "2026-11-28T07:57:01.422177+00:00",
+  "request_sha256": "9b2da90a90f35a8643f53e869baa25f73e0114e58e5a2333e193d11889ab95c7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 78391,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44062,
+    "cached_tokens": 10880,
+    "completion_tokens": 909
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/compare_slow.py <<'PY'\\nexec(open('/tmp/final_eval.py').read().split('errs=[]')[0])\\ncompact=np.c_[L,M[:,1]]; full=np.c_[L,M]; diag=np.c_[L,M[:,[0,1,5,7,10,14,15]]]\\nfor rate in (False, True):\\n errors=[]\\n for va in folds:\\n  tr=~va; ft=F\\n  if rate:\\n   def resid(k):\\n    f=-np.expm1(-t[:,None]*k); return (f@np.linalg.lstsq(f,q[tr].T,rcond=None)[0]-q[tr].T).ravel()\\n   ft=-np.expm1(-t[:,None]*least_squares(resid,[1.8,.4],bounds=(.01,10)).x)\\n  amps=np.linalg.lstsq(ft,q[tr].T,rcond=None)[0].T\\n  fast=D[va]@m._ridge(D[tr],amps[:,0],.00015)\\n  tails=[w[va]@m._ridge(w[tr],amps[:,1],.0003) for w in (compact,full,diag)]\\n  candidates=[tails[0],.75*tails[0]+.25*tails[1],.5*(tails[0]+tails[1]),.5*(tails[0]+tails[2]),tails[1]]\\n  errors.append([abs(np.c_[fast,a]@ft.T-q[va]).mean(0) for a in candidates])\\n e=np.array(errors)\\n print('fitted rates:',rate,'rows: compact, mostly compact, compact/full, compact/diagonal, full')\\n print(np.round(np.c_[e[:6].mean((0,2)),e[:6].max((0,2)),e[6:].max(2).T],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/compare_slow.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full bilinear slow readout -> H2 shrinkage toward the dominant interaction; the verified artifact has worst MAEs of 0.01276 for y and 0.02369 for trajectories across all tested slices.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the full slow readout with the dominant product immediately\",\n      \"rejected_reason\": \"The single-product model improves the high-norm and high-amplitude slices, but the diagonal-product model is stronger on ordinary folds. Compare partial shrinkage before choosing.\"\n    }\n  ],\n  \"rationale\": \"Test whether shrinking the weaker slow-mode interactions improves difficult slices without worsening ordinary folds. Leave the schema-verified artifact unchanged unless the comparison supports a promotion.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "ccbc936c0a161c8f6d5878cfb6b7338d9fd5b914aee7d68ba9fe41cd5c146630",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34993.57,
+      "usage_known": true,
+      "prompt_tokens": 44062,
+      "cached_tokens": 10880,
+      "completion_tokens": 909
+    }
+  ]
+}

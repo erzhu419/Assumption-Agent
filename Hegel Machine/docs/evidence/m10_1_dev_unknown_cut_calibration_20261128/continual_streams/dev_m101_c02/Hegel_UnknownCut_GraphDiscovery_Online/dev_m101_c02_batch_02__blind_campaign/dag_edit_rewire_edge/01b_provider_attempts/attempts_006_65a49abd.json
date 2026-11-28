@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "65a49abde2c44b41a9ddd1b01c22cde3",
+  "call_seq": 6,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c02_batch_02__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_02__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:07:00.274644+00:00",
+  "ended_at_utc": "2026-11-28T08:07:38.829601+00:00",
+  "request_sha256": "a7bea23d9dc083327b0d694c241107ab15be32ac302f8cafe07284e82fc327af",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 41774,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27504,
+    "cached_tokens": 9344,
+    "completion_tokens": 1552
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /holdout_task/_frozen_nodes/node_00.py /holdout_task/_frozen_nodes/node_01.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'separable nonlinear least squares variable projection' 2>/dev/null || true\\ncat >/tmp/saturation_probe.py <<'PY'\\nimport numpy as np,pickle,runpy\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\np='/holdout_task/'; s=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; a=runpy.run_path(p+'_frozen_nodes/node_00.py')['run_node']({'__input__':s}); b=runpy.run_path(p+'_frozen_nodes/node_01.py')['run_node']({'node_00':a}); u,z=a['u_tr'],b['z_tr']; y=s['train']['y']; n=len(y); ix=np.arange(n)\\npoly=lambda x,d: np.column_stack([np.prod(x[:,j],axis=1) for k in range(d+1) for j in combinations_with_replacement(range(x.shape[1]),k)])\\nL=poly(u,1); Q=poly(u,2); T=poly(z,2); C=s['panel_c']; D=np.linalg.lstsq(poly(C['u'],2),C['v2'],rcond=None)[0]; print('C v2 quadratic coefficients',D.round(3)); H=Q@D\\nsplits=[ix[52:]]+list(np.split(np.random.default_rng(982).permutation(n),6))+[np.argsort(np.linalg.norm(u,axis=1))[-12:]]\\nfor name,A in [('affine',L),('C-v2',np.c_[L,H]),('quadratic',Q)]:\\n for kind in ('tanh','atan','erf','softroot'):\\n  from scipy.special import erf\\n  f={'tanh':np.tanh,'atan':np.arctan,'erf':erf,'softroot':lambda v:v/np.sqrt(1+v*v)}[kind]\\n  for skip in (False,True):\\n   def fit(tr,te):\\n    q=0 if not skip else L.shape[1]; initial=np.r_[np.zeros(q),2.,np.linalg.lstsq(A[tr],y[tr]/2,rcond=None)[0]]\\n    def pred(v,j): return (L[j]@v[:q] if skip else 0)+v[q]*f(A[j]@v[q+1:]);\\n    def obj(v): return np.r_[pred(v,tr)-y[tr],.003*(v-initial)]\\n    r=least_squares(obj,initial,max_nfev=160); return np.mean(abs(pred(r.x,te)-y[te])),r.x\\n   mm=np.array([fit(np.setdiff1d(ix,te),te)[0] for te in splits]); full,zz=fit(ix,ix); print(name,kind,skip,np.round([mm[0],mm[1:7].max(),mm[7],full,zz[5 if skip else 0]],5))\\n# Pair-specific smooth ridge terms: tanh of u_i +/- z_j, and one-coordinate saturation times the other coordinate.\\nfrom scipy.linalg import qr\\nfor typ in ('tanh','sin','atan','rat'):\\n f={'tanh':np.tanh,'sin':np.sin,'atan':np.arctan,'rat':lambda v:v/(1+v*v)}[typ]; X=np.c_[u,z]; combos=[(i,j,c) for i in range(4) for j in range(4,8) for c in (-2,-1,-.5,.5,1,2)]; V=np.column_stack([X[:,i]+c*X[:,j] for i,j,c in combos]); xx=np.c_[X,V]; models=[]\\n for scale in (.5,1,1.7,2,3):\\n  F=f(scale*xx); G=f(scale*X); B=np.c_[F,(X[:,:,None]*G[:,None,:]).reshape(n,-1)]; B/=np.sqrt(B.shape[1]); K=B@B.T; P=(1+u@u.T)**3/25.;\\n  for w in (.01,.1,1.):\\n   for ridge in (.0001,.001,.01):\\n    out=[]\\n    for te in splits:\\n     tr=np.setdiff1d(ix,te); J=K+w*P; M=J[np.ix_(tr,tr)]+ridge*np.eye(len(tr)); Vv=np.linalg.solve(M,np.c_[L[tr],y[tr]]); beta=np.linalg.solve(L[tr].T@Vv[:,:5],L[tr].T@Vv[:,5]); out.append(np.mean(abs(L[te]@beta+J[np.ix_(te,tr)]@(Vv[:,5]-Vv[:,:5]@beta)-y[te])))\\n    models.append((max(out)+.2*np.mean(out),scale,w,ridge,np.round([out[0],max(out[1:7]),out[-1]],5)))\\n print(typ,sorted(models,key=lambda t:t[0])[:3])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/saturation_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Regularized cubic → saturating readout of calibrated–mapped interactions; best cubic ridge reaches 0.03437 official scalar MAE, 0.03499 worst random-fold MAE, and 0.04969 high-radius MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Freeze the passing cubic ridge\",\n      \"rejected_reason\": \"It clears the official threshold by only 0.00063 and exceeds it on the high-radius slice.\"\n    }\n  ],\n  \"rationale\": \"The dominant cubic coefficients oppose the linear slope, suggesting saturation. Fit that mechanism inside each fold and compare it with pair-specific smooth terms; if neither improves the high-radius slice, retain the polynomial reference rather than claiming a recovered formula.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "811bb0947012071de3abbeb3163436ff0c71ee4a86421d50da7cd4c21b4ab476",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41058.41,
+      "usage_known": true,
+      "prompt_tokens": 27504,
+      "cached_tokens": 9344,
+      "completion_tokens": 1552
+    }
+  ]
+}

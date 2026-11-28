@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "47230e6e99b844f98b797104f19f3077",
+  "call_seq": 5,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Flat_MonolithicArchive_Online__dev_m101_c02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:33:02.355605+00:00",
+  "ended_at_utc": "2026-11-28T08:33:32.823840+00:00",
+  "request_sha256": "6910568037f63ab9130c0e869e7bb8923a2bb418a960c5f5fb4d5ac1aa92470a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42052,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26193,
+    "cached_tokens": 9344,
+    "completion_tokens": 1197
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1; python3 /tmp/probe06.py | sed -n '1,/panel_b/p' | head -34; cat /tmp/hegel_continual_archive/dev_m101_c02_batch_01_solver.py; cat > /tmp/model06.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\ndef aff(z):return np.c_[np.ones(len(z)),z]\\ndef poly(z,d): return np.column_stack([np.prod(z[:,i],axis=1) for k in range(d+1) for i in combinations_with_replacement(range(z.shape[1]),k)])\\ndef calibration(s):\\n u,v=s['panel_a']['u'],s['panel_a']['v']; keep=np.linalg.norm(v,axis=1)<5; u,v=u[keep],v[keep]; eye=np.eye(4)\\n def design(w): return np.c_[np.tile(eye,(len(w),1)),(w[:,:,None]*eye).reshape(-1,4),w.ravel()**3,((w-1)*np.roll(w,-1,axis=1)).ravel()]\\n p=ls(design(u),v.ravel()); print('A archive coef',np.round(p,6),'rms',np.std(design(u)@p-v.ravel()))\\n def cal(x):\\n  w=(x-p[:4])/p[4:8]\\n  for _ in range(16):\\n   nxt=np.roll(w,-1,axis=1); err=(design(w)@p).reshape(-1,4)-x\\n   jac=(p[4:8]+3*p[8]*w*w+p[9]*nxt)[:,:,None]*eye+p[9]*(w-1)[:,:,None]*np.roll(eye,1,axis=1)\\n   w-=np.clip(np.linalg.solve(jac,err[...,None])[...,0],-.5,.5)\\n  return w\\n return cal\\nif __name__=='__main__':\\n tr=s['train']; x=tr['x']; y=tr['y']; t=tr['traj']; w=calibration(s)(x); print('latent ranges',w.min(0),w.max(0));\\n def assess(z):\\n  a=z[:56]; b=z[56:]; pred=b@ls(a,np.c_[y,t][:56]); return np.mean(abs(pred[:,0]-y[56:])),np.mean(abs(pred[:,1:]-t[56:]))\\n for key,z in [('raw',x),('cal',w)]:\\n  for degree in (1,2,3): print(key,degree,np.round(assess(poly(z,degree)),5))\\n for key,k in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n  u,v=s[key]['u'],s[key][k]\\n  for label,f in [('diag2',lambda a:np.c_[aff(a),a*a]),('diag3',lambda a:np.c_[aff(a),a*a,a**3]),('poly2',lambda a:poly(a,2))]:\\n   a=f(u); coef=ls(a,v); h=(a*np.linalg.pinv(a).T).sum(1); z=f(w)@coef\\n   print(key,k,label,'panelLOO',round(np.sqrt(np.mean(((a@coef-v)/(1-h[:,None]))**2)),5),'downstream affine,interaction,quad',[np.round(assess(g),5) for g in (aff(z),np.c_[aff(z),z[:,0]*z[:,2]+z[:,1]*z[:,3]],poly(z,2))])\\nPY\\npython3 /tmp/model06.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unknown nonlinear calibration and operator path) -> H2 (test the archived cyclic calibration and panel-conditioned readouts); the prior 56/16 baseline MAEs were 0.184093 for y and 0.253371 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the quadratic panel-C v2 fit as the active operator immediately\",\n      \"rejected_reason\": \"Its panel fit is promising, but panel predictability does not establish that it drives either downstream output.\"\n    }\n  ],\n  \"rationale\": \"Retest the archived cyclic calibration against retained panel-A rows. Use panel leave-one-out error to reject overfit operator bases and the 56/16 split to distinguish useful downstream coordinates from accurate but inactive operators.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "4c8507777997d9c4d59fd93d0a7fe51b18bf824561e44e75bee43417c5bf19dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33003.16,
+      "usage_known": true,
+      "prompt_tokens": 26193,
+      "cached_tokens": 9344,
+      "completion_tokens": 1197
+    }
+  ]
+}

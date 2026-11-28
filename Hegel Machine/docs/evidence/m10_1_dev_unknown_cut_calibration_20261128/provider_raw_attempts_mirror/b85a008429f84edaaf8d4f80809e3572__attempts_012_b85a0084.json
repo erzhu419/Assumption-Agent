@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b85a008429f84edaaf8d4f80809e3572",
+  "call_seq": 12,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Fixed_TwoStage_Modular_Online__dev_m101_c01_batch_05__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:23:48.938795+00:00",
+  "ended_at_utc": "2026-11-28T08:24:25.685496+00:00",
+  "request_sha256": "8abebea06bb565fbbbd3190a51dd450360e0b90c1e121c0528b97a4111cdc0eb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 84340,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44868,
+    "cached_tokens": 5504,
+    "completion_tokens": 1598
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/batch_reference.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text()\\ns=s.replace('    raw = poly(x)\\\\n', '''    def radial(w):\\n        g = normalize(w)\\n        q = g @ g.T / g.shape[1]\\n        d = ((g[:, None] - g[None, :])**2).sum(-1)\\n        return [q, q**2] + [np.exp(-h*d) for h in (.15, .5, 1.5)]\\n    def warp(w):\\n        u, v = f1(w), f2(w)\\n        return radial(u) + radial(v) + poly(np.c_[w,u,v])[1:]\\n    def products(w):\\n        q = poly(w, 1)[0]\\n        k = [poly(f(w), 1)[0] for f in (\\n            lambda w: np.tanh(1.7*w),\\n            lambda w: np.logaddexp(1.1*w,-1.1*w),\\n            lambda w: np.arctan(2.3*w),\\n        )]\\n        return k + [q*h for h in k] + [q**2*h for h in k]\\n    raw = poly(x)\\n''')\\ns=s.replace('    return {key: np.array([np.ones((len(x),len(x)))] + raw + more) for key,more in groups.items()}', '''    constant = np.ones((len(x),len(x)))\\n    kernels = {key: np.array([constant] + raw + more) for key,more in groups.items()}\\n    base = [constant] + raw[:3]\\n    abi = np.linalg.solve(B[1:].T, (a-B[0]).T).T\\n    kernels['abi_warp'] = np.array(base + warp(abi))\\n    kernels['ab_product'] = np.array(base + products(ab))\\n    return kernels''')\\ns=s.replace(\\\"('a_panel','raw_add','abi_panel'), ('a_interact','ab_trig','bi_add')\\\", \\\"('a_panel','raw_add','abi_panel','abi_warp'), ('a_interact','ab_trig','bi_add','ab_product')\\\")\\ns=s.replace(\\\"    end = z[:,-1]\\\", \\\"    y = .5*(y+scalar['abi_warp'])\\\\n    z = .5*(z+state['ab_product'])\\\\n    end = z[:,-1]\\\")\\np.write_text(s)\\nPY\\ncat > /tmp/verify_final_batch.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\ndef load(name,path):\\n    spec=importlib.util.spec_from_file_location(name,path)\\n    m=importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(m)\\n    return m\\n\\nm=load('solver','/holdout_task/batch_solver.py')\\nold=load('reference','/tmp/batch_reference.py')\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    s=pickle.load(f)[0]['study']\\nt=s['train']; x=t['x']\\ndef check(f,r):\\n    y,z,d=(r[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\n    n=len(f['test']['x'])\\n    assert y.shape==(n,) and z.shape==(n,len(f['eval_times'])) and d.shape==(4,)\\n    assert all(isinstance(v,np.ndarray) and np.isfinite(v).all() for v in (y,z,d))\\n    np.testing.assert_array_equal(d,[y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()])\\n    return y,z\\ncheck(s,m.solve_batch(s))\\na=s['panel_a']; shift,gain,*_=m._operators(s)\\nr=np.linalg.norm(a['v']-shift-a['u']*gain,axis=1)\\nprint('Panel A final diagonal fit:', (r<.00034).sum(),'inliers below .00034;', (r>12).sum(),'outliers above 12')\\nassert (r<.00034).sum()==45 and (r>12).sum()==3\\nfolds=[np.arange(56,72),np.arange(16),np.arange(28,44),np.argsort(np.linalg.norm(x,axis=1))[-16:],*[np.random.default_rng(seed).choice(72,16,replace=False) for seed in (76,174,419)]]\\nfor solver in [old,m]:\\n    es=[]\\n    for j in folds:\\n        i=np.setdiff1d(np.arange(len(x)),j)\\n        f={**s,'train':{**t,**{k:t[k][i] for k in ('x','y','traj')}},'test':{'x':x[j]}}\\n        y,z=check(f,solver.solve_batch(f)); e=np.abs(z-t['traj'][j])\\n        es.append([np.abs(y-t['y'][j]).mean(),e.mean(),e[:,-1].mean()])\\n    print(solver.__name__,np.round(es,5),'mean',np.mean(es,0),'worst',np.max(es,0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_final_batch.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 verified kernel ensemble -> H2 inverse-panel warp for scalar prediction and product interactions for trajectories; challenger six-slice worst MAEs are 0.07147 for y, 0.01129 for trajectory, and 0.01671 at the terminal time.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the explicit time-basis blend\",\n      \"rejected_reason\": \"The product-interaction blend without the explicit time basis gives lower worst-slice trajectory and terminal-state MAEs.\"\n    }\n  ],\n  \"rationale\": \"Integrate the challengers that lowered both mean and worst held-out error for their respective outputs. Verify the exact artifact in isolation, compare it with the saved reference on an additional slice, and check the calibration residuals and output contract directly.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "b9a52e91d56f2a3fe6476b588896dd31575e758c4c76e5d566636f9d60bda074",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41899.7,
+      "usage_known": true,
+      "prompt_tokens": 44868,
+      "cached_tokens": 5504,
+      "completion_tokens": 1598
+    }
+  ]
+}

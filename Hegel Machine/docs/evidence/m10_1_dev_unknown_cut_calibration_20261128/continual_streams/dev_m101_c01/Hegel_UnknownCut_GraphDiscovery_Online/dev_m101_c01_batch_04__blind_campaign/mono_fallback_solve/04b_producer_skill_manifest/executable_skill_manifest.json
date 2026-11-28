@@ -1,0 +1,193 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_m101_c01_batch_04_8cdb7346f1c5",
+    "source_hash": "8cdb7346f1c57f55f8aecf6fc92575717edce2e443b1d9ec4a12f65b01d8660d",
+    "parent_ids": [],
+    "source_episode_id": "mono_fallback_solve",
+    "task_id": "dev_m101_c01_batch_04__blind_campaign",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/finalprobe.py",
+        "archived_relpath": "producers/tmp__finalprobe.py",
+        "bytes": 4070,
+        "sha256": "5916a66207bc6c693c7bf7c3dbf6427b757fd9c78007d259cf7a5a55d43003be"
+      },
+      {
+        "container_path": "/tmp/grammar.py",
+        "archived_relpath": "producers/tmp__grammar.py",
+        "bytes": 2178,
+        "sha256": "1b2ab80d3520029b8a05d3fbaa650fee137fc9676efbaef982b1f8d22283db07"
+      },
+      {
+        "container_path": "/tmp/links.py",
+        "archived_relpath": "producers/tmp__links.py",
+        "bytes": 2891,
+        "sha256": "820c800d6d87ec2768f5a818aab88ab8fde45a079dd1b46ba3787e1e6440744a"
+      },
+      {
+        "container_path": "/tmp/operators.py",
+        "archived_relpath": "producers/tmp__operators.py",
+        "bytes": 2492,
+        "sha256": "8e8b5cf8d00c5d8ed499323047adac266ce5815bd450579eddfd32282f51a5a1"
+      },
+      {
+        "container_path": "/tmp/panels.py",
+        "archived_relpath": "producers/tmp__panels.py",
+        "bytes": 1689,
+        "sha256": "c07fd38ea220f96255094c175a44d9096eb35072f2c891a6e2d2b52b56275191"
+      },
+      {
+        "container_path": "/tmp/probe.py",
+        "archived_relpath": "producers/tmp__probe.py",
+        "bytes": 1848,
+        "sha256": "36f2e52216bc0a6235ae987f8a7bd224e275b6c807a6b114d314566e55281281"
+      },
+      {
+        "container_path": "/tmp/structure.py",
+        "archived_relpath": "producers/tmp__structure.py",
+        "bytes": 2781,
+        "sha256": "04c68a31ed0de5240e807ef9892a86323e3b482dd3a539657a17f70d87f04593"
+      },
+      {
+        "container_path": "/tmp/verify_solver.py",
+        "archived_relpath": "producers/tmp__verify_solver.py",
+        "bytes": 971,
+        "sha256": "29898416a244941c36a2bffdb7ce02019a9522b617c19e7fcea16e80d683e162"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m101_c01_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m101_c01_batch_00_solver.py",
+        "bytes": 1922,
+        "sha256": "f7f0fe50f48cb0d23f293ff53ea16a0fb808b4ac2e11ee8db9b849a3de836b15"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m101_c01_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m101_c01_batch_02_solver.py",
+        "bytes": 3469,
+        "sha256": "d1f498af429b49373133f5a0285edac37c0ca58afe4b451bd261bd50a47ba0f5"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task; cat /tmp/hegel_continual_archive/*solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference-panel alignment robust IRLS variable projection' 2>&1 | head -35; python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=6,suppress=True)\nfor k in ['eval_times','telemetry_vec']: print(k,s[k]);\nfor k,d in s.items():\n if isinstance(d,dict):\n  for j,a in d.items(): print(k,j,'mean/std',a.mean(axis=0),a.std(axis=0),'first',a[:3]);\nfor k in ['panel_a','panel_b','panel_c']:\n d=s[k]; x=d['u']; A",
+      "cd /holdout_task; cat /tmp/hegel_continual_archive/dev_m101_c01_batch_02_solver.py; cat > /tmp/probe.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nfrom sklearn.preprocessing import PolynomialFeatures\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; t=s['eval_times']; np.set_printoptions(precision=5,suppress=True)\nprint('t,tel',t,s['telemetry_vec'])\na=s['panel_a']; A=np.c_[np.ones(len(a['u'])),a['u']]; keep=np.ones(len(A),bool)\nfor _ in range(4):\n b=np.linalg.lstsq(A[keep],a['v'][ke",
+      "cat > /tmp/structure.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.linalg import solve\nfrom scipy.optimize import least_squares\nfrom sklearn.preprocessing import PolynomialFeatures\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; d=s['train']; y=d['y']; z=d['traj']; t=s['eval_times']; raw=d['x']; p=s['panel_a']; A=np.c_[np.ones(len(p['u'])),p['u']]; b=np.linalg.lstsq(A,p['v'],rcond=None)[0]; b=np.linalg.lstsq(A[np.linalg.norm(A@b-p['v'],axis=1)<2],p['v'][np.linalg.norm(A@b-p['v'],axis=1)<2],rcond=None)[0]; x=b[0]+raw@b[1:]; exp=lambda k:-np.expm1(-t*k); g=exp(.79827); a",
+      "cat > /tmp/panels.py <<'PY'\nfrom structure import *\nfrom scipy.linalg import qr\nfrom scipy.optimize import minimize_scalar\nnp.set_printoptions(precision=4,suppress=True,linewidth=140)\npb=s['panel_b']; pc=s['panel_c'];\ndef aff(u): return np.c_[np.ones(len(u)),u]\ndef fit(F,v): return np.linalg.lstsq(F,v,rcond=None)[0]\nbb=fit(aff(pb['u']),pb['v']);\nprint('B',bb)\nfor out in ('v1','v2'):\n u,v=pc['u'],pc[out]; pf=PolynomialFeatures(2); q=pf.fit_transform(u); print('C',out,'range',u.min(),u.max(),v.min(),v.max());\n for F in [aff(u),q,np.c_[aff(u),u**3],np.c_[aff(u),u**2,u**3]]:\n  pp=F@fit(F,v); e=v-p",
+      "cat > /tmp/operators.py <<'PY'\nfrom structure import *\nfrom scipy.optimize import minimize_scalar\nfrom itertools import combinations_with_replacement\n\ndef aff(u): return np.c_[np.ones(len(u)),u]\ndef fit(F,v): return np.linalg.lstsq(F,v,rcond=None)[0]\npc=s['panel_c']; pb=s['panel_b']; bb=fit(aff(pb['u']),pb['v']); u=pc['u']; v=pc['v1']\ndef c1design(u,p):return aff(np.tanh(u*p[:4]+p[4:]))\ndef rc(p):\n F=c1design(u,p); return (F@fit(F,v)-v).ravel()\np=least_squares(rc,np.r_[np.ones(4)*1.6,np.zeros(4)],bounds=(np.r_[np.ones(4)*.2,np.ones(4)*-2],np.r_[np.ones(4)*4,np.ones(4)*2])).x\nc1=fit(c1design(u,",
+      "cat > /tmp/grammar.py <<'PY'\nfrom operators import *\nfrom itertools import combinations\nfrom scipy.linalg import qr\nend = z @ (np.linalg.svd(z,full_matrices=False)[2][0]/np.linalg.svd(z,full_matrices=False)[2][0,-1]); g=np.linalg.svd(z,full_matrices=False)[2][0]; end=z@g*g[-1]; Y2=np.c_[y,end]\nB=aff(x)@bb; Br=aff(raw)@bb\nP2=PolynomialFeatures(2).fit_transform(x)\ndef cross(a,b): return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\ndef check(F,tr,te,j,ridge=0.):\n U,sv,V=np.linalg.svd(F[tr],full_matrices=False); v=sv/(sv*sv+ridge); v[sv<1e-8]=0\n co=V.T@(v*(U.T@Y2[tr,j])); return np.mean(abs(F[te]@",
+      "sed -i \"s/X\\*h\\]/X*h if X.shape==h.shape else cross(X,h)]/\" /tmp/grammar.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/grammar.py | head -66; OPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py | head -26",
+      "cat /tmp/hegel_continual_archive/dev_m101_c01_batch_02_solver.py; cat > /tmp/links.py <<'PY'\nfrom operators import *\nfrom scipy.optimize import least_squares\nfrom itertools import combinations\nnp.set_printoptions(precision=4,suppress=True)\n_,_,vt=np.linalg.svd(z,full_matrices=False); Y=np.c_[y,z@vt[0]*vt[0,-1]]\nprint('output ranges',np.quantile(Y,[0,.05,.5,.95,1],axis=0)); print('spearman y vs amp',np.corrcoef(np.argsort(np.argsort(Y,axis=0),axis=0).T))\ndef cross(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\ndef pol(a,d):return PolynomialFeatures(d).fit_transform(a)\nB=aff(x)@bb; Br=",
+      "cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; tail -18 /tmp/hegel_continual_archive/dev_m101_c01_batch_02_solver.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/links.py | grep -A5 'BEST LINKS 0'; cat >/tmp/finalprobe.py <<'PY'\nfrom operators import *\nfrom scipy.linalg import cho_factor,cho_solve\nfrom scipy.optimize import minimize\nfrom itertools import combinations_with_replacement\nnp.set_printoptions(precision=5,suppress=True)\ndef poly(X,d):return PolynomialFeatures(d).fit_transform(X)\ndef cross(A,B):return (A[:,:,None]*B[:,None,:]).reshape(len(A),-1)\nB=aff(x)@bb; Br=aff(raw)@bb\npri",
+      "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Panel-calibrated spatial regression and low-rank trajectory prediction.\"\"\"\nfrom itertools import combinations_with_replacement\n\nimport numpy as np\nfrom scipy.linalg import cho_factor, cho_solve\nfrom scipy.optimize import least_squares, minimize\nfrom scipy.spatial.distance import cdist\n\n\ndef _aff(x):\n    return np.column_stack((np.ones(len(x)), x))\n\n\ndef _ols(f, y):\n    return np.linalg.lstsq(f, y, rcond=None)[0]\n\n\ndef _calibrate(panel, x):\n    f = _aff(panel['u'])\n    v = panel['v']\n    keep = np.ones(len(f), dtype=bool)\n    for _ in range(6):\n    "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__finalprobe.py",
+      "primary_producer_container_path": "/tmp/finalprobe.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 5412,
+        "sha256": "e68e7c28a912d03d931f65f796fc6f45554b88debd1e6bec7babae88e81a11a3",
+        "content_addressed_ref": "content_addressed_blobs/e68e7c28a912d03d931f65f796fc6f45554b88debd1e6bec7babae88e81a11a3.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "poly",
+      "cross",
+      "gp",
+      "pol",
+      "aff",
+      "fit",
+      "c1design",
+      "fit_rat"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "8cdb7346f1c57f55f8aecf6fc92575717edce2e443b1d9ec4a12f65b01d8660d",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Panel-calibrated spatial regression and low-rank trajectory prediction.\"\"\"\nfrom itertools import combinations_with_replacement\n\nimport numpy as np\nfrom scipy.linalg import cho_factor, cho_solve\n",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "8cdb7346f1c57f55f8aecf6fc92575717edce2e443b1d9ec4a12f65b01d8660d",
+        "expected_candidate_sha256": "8cdb7346f1c57f55f8aecf6fc92575717edce2e443b1d9ec4a12f65b01d8660d",
+        "computed_candidate_sha256": "8cdb7346f1c57f55f8aecf6fc92575717edce2e443b1d9ec4a12f65b01d8660d",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 5412
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_8cdb7346"
+    }
+  },
+  "structure": {
+    "full_producer_count": 10,
+    "reusable_ast_function_closures": [
+      {
+        "name": "poly",
+        "code": "def poly(X, d):\n    from sklearn.preprocessing import PolynomialFeatures\n    return PolynomialFeatures(d).fit_transform(X)"
+      },
+      {
+        "name": "cross",
+        "code": "def cross(A, B):\n    return (A[:, :, None] * B[:, None, :]).reshape(len(A), -1)"
+      },
+      {
+        "name": "gp",
+        "code": "def gp(k, tr, te, Y, floor):\n    from scipy.linalg import cho_factor\n    from scipy.linalg import cho_solve\n    from scipy.optimize import minimize\n    n = len(tr)\n    A = k[:, tr[:, None], tr]\n    B = k[:, te[:, None], tr]\n    scale = np.diagonal(A, axis1=1, axis2=2).mean(1)\n    A = A / scale[:, None, None]\n    B = B / scale[:, None, None]\n    I = np.eye(n)\n    A = np.concatenate([A, I[None]])\n    sd = Y[tr].std()\n    Yt = Y[tr] / sd\n\n    def obj(p, ret=False):\n        w = np.exp(p)\n        cf = cho_factor(np.einsum('i,ijk->jk', w, A))\n        al = cho_solve(cf, Yt)\n        if ret:\n            return sd * np.einsum('i,ijk,k->j', w[:-1], B, al)\n        Q = cho_solve(cf, I) - np.outer(al, al)\n        return (0.5 * Yt @ al + np.log(np.diag(cf[0])).sum(), 0.5 * w * np.einsum('ijk,jk->i', A, Q))\n    p = minimize(obj, np.r_[np.zeros(len(k)) - 2, -7], jac=True, method='L-BFGS-B', bounds=[(-15, 6)] * len(k) + [(np.log(floor / sd ** 2), 1)]).x\n    return obj(p, True)"
+      },
+      {
+        "name": "pol",
+        "code": "def pol(a, d):\n    from sklearn.preprocessing import PolynomialFeatures\n    return PolynomialFeatures(d).fit_transform(a)"
+      },
+      {
+        "name": "aff",
+        "code": "def aff(u):\n    return np.c_[np.ones(len(u)), u]"
+      },
+      {
+        "name": "fit",
+        "code": "def fit(F, v):\n    return np.linalg.lstsq(F, v, rcond=None)[0]"
+      },
+      {
+        "name": "c1design",
+        "code": "def c1design(u, p):\n    return aff(np.tanh(u * p[:4] + p[4:]))"
+      },
+      {
+        "name": "fit_rat",
+        "code": "def fit_rat(X, F, tr, te, Y, mode):\n    from scipy.optimize import least_squares\n    W = X * X\n    if mode in (1, 3):\n        W = np.c_[W, cross(X, X)[:, [1, 2, 3, 6, 7, 11]]]\n\n    def pred(p, tgt):\n        if mode in (1, 3):\n            L = np.array([[p[0], 0, 0, 0], [p[4], p[1], 0, 0], [p[5], p[7], p[2], 0], [p[6], p[8], p[9], p[3]]])\n            D = 1 + np.sum((X @ L) ** 2, axis=1)\n        else:\n            D = 1 + W @ p\n        D = F / D[:, None]\n        M = D if mode < 2 else np.c_[D, poly(X, 2)]\n        R = M[tr]\n        c = fit(R, Y[tr]) if mode < 2 else np.linalg.solve(R.T @ R + 0.0003 * np.eye(R.shape[1]), R.T @ Y[tr])\n        return M[tgt] @ c\n    init = np.r_[np.full(4, 0.4), np.zeros(6)] if mode in (1, 3) else np.full(4, 0.2)\n    p = least_squares(lambda p: pred(p, tr) - Y[tr], init, bounds=(0, 5) if mode in (0, 2) else (-3, 3), max_nfev=35).x\n    return pred(p, te)"
+      }
+    ]
+  }
+}

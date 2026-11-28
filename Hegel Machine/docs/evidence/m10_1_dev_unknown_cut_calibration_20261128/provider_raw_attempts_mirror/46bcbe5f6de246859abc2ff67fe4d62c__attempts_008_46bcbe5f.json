@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "46bcbe5f6de246859abc2ff67fe4d62c",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:30:27.560410+00:00",
+  "ended_at_utc": "2026-11-28T08:31:02.060553+00:00",
+  "request_sha256": "f00bea1e4780eb3ffb49a8d259eca72e6e8e4bbc5fa2547442164728ee877d6b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51124,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30652,
+    "cached_tokens": 9344,
+    "completion_tokens": 1311
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/shared.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; y=s['train']['y']; T=s['train']['traj']; z=np.load('/tmp/stages.npz')['b']; t=s['eval_times']; pairs=list(itertools.combinations_with_replacement(range(4),2))\\nU=np.c_[np.ones(len(z)),z]; Q=np.prod(z[:,pairs],axis=2); F=np.c_[U,Q]\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef mae(a):return np.mean(abs(a))\\ndef shared(i):\\n u=U[i]; q=Q[i]; w=ls(q-u@ls(u,q),T[i]-u@ls(u,T[i])); _,_,r=np.linalg.svd(w,full_matrices=False); return w@r[0]\\ndef data(i,j):\\n w=shared(i); q=Q@w; f=np.c_[U,q]; wt=ls(f[i],T[i]); print('states',mae(f[j]@wt-T[j]),'coeff',np.round(wt,3)) if j[0]==56 else None\\n return f,q,wt\\nI=np.arange(56); J=np.arange(56,72); f,q,wt=data(I,J)\\nprint('y state projection',ls(f[I],y[I]),'mae',mae(f[J]@ls(f[I],y[I])-y[J])); print('state/time residual sv',np.linalg.svd(T[I]-f[I]@wt,compute_uv=False));print('y residual after state shared quadratic',np.round(np.sort(y[I]-f[I]@ls(f[I],y[I])),4))\\nfunc={'rat':lambda a:a/(1+a*a),'tanh':np.tanh,'sin':np.sin,'atan':np.arctan,'sat':lambda a:a/np.sqrt(1+a*a),'cub':lambda a:a**3,'rat3':lambda a:a**3/(1+a*a)}\\ndef fit(i,j,f,q,wt,name,mode):\\n rng=np.random.default_rng(18); base=F if mode=='full' else f; zi=ls(base[i],y[i])[1:5]; dirs=np.r_[zi[None,:],wt[1:5,[0,7]].T,np.eye(4),rng.normal(size=(5,4))]; dirs/=np.linalg.norm(dirs,axis=1,keepdims=True)\\n def bf(k,p):\\n  a=U[k]@p[:5]; b=base[k]\\n  if mode=='gated':return np.c_[b,U[k]/(1+a[:,None]**2)]\\n  if mode=='two':return np.c_[b,func[name](a),func[name](U[k]@p[5:])]\\n  if mode=='qgate':return np.c_[b,func[name](a+p[5]*q[k])]\\n  return np.c_[b,func[name](a)]\\n def r(p):\\n  a=bf(i,p);return a@ls(a,y[i])-y[i]\\n starts=[np.r_[0,d*a] for d in dirs for a in ([.9,2.] if mode!='two' else [1.6])]; starts=[np.r_[p,0.] for p in starts] if mode=='qgate' else ([np.r_[p,0,dirs[(k+2)%len(dirs)]*1.1] for k,p in enumerate(starts)] if mode=='two' else starts)\\n sol=min((least_squares(r,p,max_nfev=90) for p in starts),key=lambda e:e.cost); a=bf(i,sol.x); w=ls(a,y[i]);return mae(sol.fun),mae(bf(j,sol.x)@w-y[j]),sol.x,w\\ncand=[(n,m) for n in func for m in ('shared','full')]+[('rat',m) for m in ('qgate','gated','two')]+[('tanh','two')]\\nfor n,m in cand:\\n a,b,p,w=fit(I,J,f,q,wt,n,m);print(n,m,np.round([a,b],6),np.round(p,4),np.round(w,4) if m=='shared' else '')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/shared.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (independent quadratic scalar and trajectory terms) -> H2 (a shared quadratic term plus a nonlinear scalar correction); current 56/16 MAEs are 0.01766 for y and 0.00522 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the independent quadratic terms\",\"rejected_reason\":\"The estimated scalar and trajectory quadratic coefficients correlate at 0.985; testing a shared term could cut the scalar parameter count substantially.\"}],\"rationale\":\"Estimate the shared quadratic direction from fitting-row trajectories only. Compare compact scalar corrections on the held-out rows to see whether sharing that term improves prediction or removes genuine scalar structure.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a389b4d241117aea818c1ff1484d0493b31f85ba8f5748e2734536f018a07b9e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37049.54,
+      "usage_known": true,
+      "prompt_tokens": 30652,
+      "cached_tokens": 9344,
+      "completion_tokens": 1311
+    }
+  ]
+}

@@ -1,0 +1,131 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_m101_c04_batch_02_0fc0f2789f37",
+    "source_hash": "0fc0f2789f370af2c24330ecfd4b58f35b1207558aa7858b4cf19971185168a6",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "dev_m101_c04_batch_02__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m101_c04_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m101_c04_batch_00_solver.py",
+        "bytes": 2379,
+        "sha256": "8e5e066db2e5ed651242064b84055b93b6496b62ca82bfb40735981939dd8e89"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json _frozen_nodes/node_01.py test_dag_candidate.py validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_batch.pkl','rb') as f: o=pickle.load(f)\ndef inspect(x, depth=0):\n if isinstance(x,dict):\n  for k,v in x.items():\n   print(' '*depth, k); inspect(v, depth+2)\n elif isinstance(x,np.ndarray):\n  print(' '*depth,x.shape,x.dtype,'samples:',x[:3] if x.ndim<=2 else x.reshape(-1)[:12]);\n elif isinstance(x,(list,tuple)):\n  print(' '*depth,type(x),len(x));\n  if len(x): inspect(x[0],depth+2)\n else: print(' '*depth,repr(x)[:180])\nins",
+      "cd /holdout_task && sed -n '35,200p' test_dag_candidate.py && cat validate_public_schema.py && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -35; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np,itertools as it\np=pickle.load(open('public_batch.pkl','rb'));print('root:',[(k,type(v).__name__) for k,v in p.items()]);v=next(v for v in [p,*p.values()] if isinstance(v,dict) and 'panel_a' in v);print('batch:',[(k,list(w) if isinstance(w,dict) else (np.shape(w),repr(w)[:120])) for k,w in v.items()]);",
+      "cd /holdout_task && python3 -I - <<'PY'\nimport pickle, numpy as np\nfrom itertools import combinations_with_replacement\nwith open('public_batch.pkl','rb') as f:\n    studies=pickle.load(f)\ns=studies[0]['study']\nprint('studies',len(studies),'keys',list(s))\nterms=[()]+[(i,) for i in range(4)]+[t for d in (2,3) for t in combinations_with_replacement(range(4),d)]\nfor name in ('panel_a','panel_b'):\n    u=s[name]['u']; v=s[name]['v']; X=np.column_stack([np.prod(u[:,t],axis=1) for t in terms]); print(name, 'u range',np.min(u,axis=0),np.max(u,axis=0))\n    models={'affine':[0,1,2,3,4]}\n    if name=='pane",
+      "cat > /holdout_task/node_00.py <<'PY'\nimport numpy as np\n\n\ndef _fit_panel_a(panel):\n    u, v = panel['u'], panel['v']\n    nxt = np.roll(u, -1, axis=1)\n    # Each output has a linear gain, a cubic self term, and coupling to its successor.\n    design = np.stack((np.ones_like(u), u, nxt, u * nxt, u**3), axis=-1).transpose(1, 0, 2)\n    targets = v.T[..., None]\n\n    def fit(weights):\n        return np.stack([np.linalg.lstsq(d * weights[:, None], y * weights[:, None], rcond=None)[0][:, 0]\n                         for d, y in zip(design, targets)])\n\n    weights = np.ones(len(u))\n    for _ in range(25",
+      "cd /holdout_task && python3 -I - <<'PY'\nimport pickle, numpy as np, runpy\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; n=runpy.run_path('node_00.py'); z=n['run_node']({'__input__':s})['z_tr']; y=s['train']['y']; u,v=(s['panel_b'][k] for k in ('u','v')); b,M=np.split(np.linalg.lstsq(np.column_stack((np.ones(len(u)),u)),v,rcond=None)[0],[1]); print('B bias',b,'B matrix',M,'singular values',np.linalg.svd(M,compute_uv=False)); h=max(40,len(y)-max(12,len(y)//4)); print('split',h)\ndef report(name,q,intercept=False):\n    X=np.column_stack((q,q[:,0]*q[:,2]+q[:,1]*q[:,3])); X=np.column_sta",
+      "set -e\ncd /holdout_task\npython3 -I - <<'PY'\nfrom pathlib import Path\np = Path('node_00.py')\ns = p.read_text()\nstart = s.index('    coeff = _fit_panel_a(study[\\'panel_a\\'])', s.index('def run_node'))\np.write_text(s[:start] + '''    coeff = _fit_panel_a(study['panel_a'])\n    u, v = study['panel_b']['u'], study['panel_b']['v']\n    design = np.column_stack((np.ones(len(u)), u))\n    affine = np.linalg.lstsq(design, v, rcond=None)[0]\n\n    def calibrate(x):\n        return _invert_panel_a(x, coeff) @ affine[1:] + affine[0]\n\n    return {'z_tr': calibrate(train['x']), 'z_te': calibrate(test['x']),\n     ",
+      "cd /holdout_task && python3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\n\nnode = runpy.run_path('/holdout_task/node_00.py')\nwith open('public_batch.pkl', 'rb') as f:\n    studies = pickle.load(f)\nfor row in studies:\n    s = row['study']\n    a, b = s['panel_a'], s['panel_b']\n    fit = node['_fit_panel_a']\n    inverse = node['_invert_panel_a']\n    x = np.concatenate((s['train']['x'], s['test']['x']))\n    coeff = fit(a)\n    z = inverse(x, coeff)\n    def forward(z, c):\n        bias, gain, cross, pair, cubic = c.T\n        return bias + gain*z + (cross + pair*z)*np.roll(z, -1, axis=1) + cubic*"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__dev_m101_c04_batch_00_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/dev_m101_c04_batch_00_solver.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_00.py",
+        "filename": "node_00.py",
+        "bytes": 2479,
+        "sha256": "767f7b9cd686d14543a9098a5f3f00d125009bf0f2a2901e7ebc88fe8237e8f2",
+        "content_addressed_ref": "content_addressed_blobs/767f7b9cd686d14543a9098a5f3f00d125009bf0f2a2901e7ebc88fe8237e8f2.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_00.py"
+    ],
+    "exported_pure_functions": [
+      "_ls",
+      "_affine",
+      "_calibration",
+      "_coordinates",
+      "_cross",
+      "_relaxation",
+      "solve_batch"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "0fc0f2789f370af2c24330ecfd4b58f35b1207558aa7858b4cf19971185168a6",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "cd /holdout_task && python3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\n\nnode = runpy.run_path('/holdout_task/node_00.py')\nwith open('public_batch.pkl', 'rb') as f:\n    studies = pickle.load(f)\nfor row in studies:\n    s = row['study",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "0fc0f2789f370af2c24330ecfd4b58f35b1207558aa7858b4cf19971185168a6",
+        "expected_candidate_sha256": "0fc0f2789f370af2c24330ecfd4b58f35b1207558aa7858b4cf19971185168a6",
+        "computed_candidate_sha256": "0fc0f2789f370af2c24330ecfd4b58f35b1207558aa7858b4cf19971185168a6",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_00.py",
+            "bytes": 2479
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_0fc0f278"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_ls",
+        "code": "def _ls(a, b):\n    return np.linalg.lstsq(a, b, rcond=None)[0]"
+      },
+      {
+        "name": "_affine",
+        "code": "def _affine(x):\n    return np.column_stack((np.ones(len(x)), x))"
+      },
+      {
+        "name": "_calibration",
+        "code": "def _calibration(study):\n    a = study['panel_a']\n    (u, v) = (a['u'], a['v'])\n    (i, j) = np.triu_indices(len(u), 1)\n    coeff = []\n    for (x, y) in zip(u.T, v.T):\n        dx = x[i] - x[j]\n        good = dx != 0\n        gain = np.median((y[i] - y[j])[good] / dx[good])\n        offset = np.median(y - gain * x)\n        err = np.abs(y - offset - gain * x)\n        keep = err <= max(0.001, 5 * np.median(err))\n        coeff.append(_ls(_affine(x[keep]), y[keep]))\n    (offset, gain) = np.asarray(coeff).T\n    b = study['panel_b']\n    mixing = _ls(_affine(b['u']), b['v'])\n    return (offset, gain, mixing)"
+      },
+      {
+        "name": "_coordinates",
+        "code": "def _coordinates(x, calibration):\n    (offset, gain, mixing) = calibration\n    return _affine((x - offset) / gain) @ mixing"
+      },
+      {
+        "name": "_cross",
+        "code": "def _cross(z):\n    return z[:, 0] * z[:, 2] + z[:, 1] * z[:, 3]"
+      },
+      {
+        "name": "_relaxation",
+        "code": "def _relaxation(design, trajectories, times):\n    from scipy.optimize import least_squares\n    (q, r) = np.linalg.qr(design, mode='reduced')\n    projected = q.T @ trajectories\n\n    def basis(log_rates):\n        return -np.expm1(-times[:, None] * np.exp(log_rates))\n\n    def residual(log_rates):\n        b = basis(log_rates)\n        return (b @ _ls(b, projected.T) - projected.T).ravel()\n    result = least_squares(residual, np.log([0.4, 1.8]), bounds=(np.log(0.03), np.log(15.0)))\n    b = basis(result.x)\n    weights = _ls(r, _ls(b, projected.T).T)\n    return weights @ b.T"
+      },
+      {
+        "name": "solve_batch",
+        "code": "def solve_batch(study: dict) -> dict:\n    calibration = _calibration(study)\n    train = study['train']\n    z = _coordinates(train['x'], calibration)\n    z_test = _coordinates(study['test']['x'], calibration)\n    (design, test_design) = (_affine(z), _affine(z_test))\n    w = _ls(np.column_stack((z, _cross(z))), train['y'])\n    y_hat = np.column_stack((z_test, _cross(z_test))) @ w\n    state_pred = test_design @ _relaxation(design, train['traj'], study['eval_times'])\n    final_state = state_pred[:, -1]\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), final_state.mean(), final_state.std()])}"
+      }
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c425a811052340a09e9e7aff46d50b93",
+  "call_seq": 10,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:18:52.967462+00:00",
+  "ended_at_utc": "2026-11-28T08:19:42.973404+00:00",
+  "request_sha256": "7699f144b74235082a7083c8632d70db31812833774c440d1f9f0195e2baa9a7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68470,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39385,
+    "cached_tokens": 9344,
+    "completion_tokens": 1957
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && sed '/^def _coordinates/,$d' /tmp/hegel_continual_archive/dev_m101_c04_batch_02_solver.py > batch_solver.py && cat >>batch_solver.py <<'PY'\\ndef _operator(panel, key, features, start, bounds):\\n    u, v = panel['u'], panel[key]\\n\\n    def residual(p):\\n        f = _affine(features(u, p))\\n        return (f @ _ls(f, v) - v).ravel()\\n\\n    p = least_squares(residual, start, bounds=bounds).x\\n    c = _ls(_affine(features(u, p)), v)\\n    return lambda x: _affine(features(x, p)) @ c\\n\\n\\ndef _branches(study, x):\\n    b = _operator(study['panel_b'], 'v',\\n                  lambda u, p: np.sign(u)*np.maximum(abs(u)-p[0], 0)**p[1],\\n                  [.35, 1.5], ([.1, .8], [.7, 2.3]))\\n    c = _operator(study['panel_c'], 'v1',\\n                  lambda u, p: np.c_[u, u*abs(u)**p[1]/(1+p[0]*abs(u)**p[2])],\\n                  [.6, 1, 1.15], ([.01, .4, .5], [3, 2, 3]))\\n    d = _operator(study['panel_c'], 'v2',\\n                  lambda u, p: np.c_[u, abs(u)**p[1]/(1+p[0]*abs(u)**p[2])],\\n                  [.25, 2, 1.5], ([.01, 1.2, .5], [3, 3, 3]))\\n    branches = {'x': x, 'b': b(x), 'c': c(x), 'd': d(x)}\\n    branches.update({k+j: f(branches[j]) for k,f in [('b',b),('c',c),('d',d)] for j in 'bcd'})\\n    return branches\\n\\n\\ndef _trajectory(z, zz, traj, times):\\n    q, r = np.linalg.qr(z, mode='reduced')\\n    target = (q.T @ traj).T\\n\\n    def basis(p):\\n        return -np.expm1(-times[:, None]*p)\\n\\n    def residual(p):\\n        h = basis(p)\\n        return (h @ _ls(h, target) - target).ravel()\\n\\n    h = basis(least_squares(residual, [.4, 1.8], bounds=([.05, .85], [.85, 8])).x)\\n    return zz @ _ls(r, _ls(h, target).T) @ h.T\\n\\n\\ndef _scalar(branches):\\n    b, d = branches['b'], branches['db']\\n    return _affine(np.c_[b, d, b*b, d*d, b*d])\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    x = _unwarp(np.concatenate((train['x'], study['test']['x'])), _calibrate(study['panel_a']))\\n    branches = _branches(study, x)\\n    f = _scalar(branches)\\n    y = f[n:] @ _ls(f[:n], train['y'])\\n    z = _affine(branches['b'])\\n    trajectory = _trajectory(z[:n], z[n:], train['traj'], study['eval_times'])\\n    end = trajectory[:, -1]\\n    return {'y_hat': y, 'state_pred': trajectory,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\ncat >/tmp/probe10.py <<'PY'\\nimport pickle,numpy as np,sys\\nfrom itertools import combinations,combinations_with_replacement\\nsys.path.insert(0,'/holdout_task'); import batch_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=m._unwarp(tr['x'],m._calibrate(s['panel_a'])); B=m._branches(s,x); b=B['b']; y=tr['y']; a=m._affine; ls=m._ls\\nidx=np.arange(len(x)); folds=[(idx[:56],idx[56:])]+[(idx[idx%5!=j],idx[idx%5==j]) for j in range(5)]; tail=np.argsort(np.linalg.norm(x,axis=1))[-16:]; folds.append((np.setdiff1d(idx,tail),tail))\\ndef evaluate(F,v=y):\\n E=np.array([abs(F[j]@ls(F[i],v[i])-v[j]).mean() for i,j in folds]); return np.r_[E[0],E[1:6].mean(),E[:6].max(),E[-1]]\\nres=[]\\ndef add(k,*fields):\\n F=a(np.column_stack(fields)); res.append((k,F.shape[1],evaluate(F)))\\nadd('b',b)\\nfor k,z in B.items():\\n add(k+' lin',b,z);add(k+' diag',b,z,b*b,z*z,b*z)\\n add(k+' cross',b,z,np.einsum('ni,nj->nij',b,z).reshape(len(b),16)); add(k+' tanh',b,z,np.tanh(z)); add(k+' rational',b,z,z/(1+z*z)); add(k+' scalediff',b,z,(b-z)**2,(b+z)**2)\\nfor k,j in combinations(B,2):\\n z,w=B[k],B[j]; add(k+' '+j+' diag',b,z,w,b*z,b*w,z*w);add(k+' '+j+' lin',b,z,w)\\nfor k,j in combinations_with_replacement(range(4),2):\\n pass\\nadd('b quadratic',b,*[b[:,k]*b[:,j] for k,j in combinations_with_replacement(range(4),2)])\\nadd('b cubic',b,*[np.prod(b[:,q],axis=1) for d in (2,3) for q in combinations_with_replacement(range(4),d)])\\nfor col in [1,2,3]:\\n print('sort',col,[(k,n,e.round(5).tolist()) for k,n,e in sorted(res,key=lambda r:r[2][col])[:12]])\\nfor i,j in folds:\\n ss={**s,'train':{**tr,**{k:tr[k][i] for k in ('x','y','traj')}},'test':{'x':tr['x'][j]}}; o=m.solve_batch(ss); print('candidate',len(j),np.mean(abs(o['y_hat']-y[j])),np.mean(abs(o['state_pred']-tr['traj'][j])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe10.py && python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (diagonal calibration and shared readout) -> H2 (cyclic cubic inversion, a cross-branch scalar head, and a two-rate trajectory head); prior worst-fold MAEs were 0.0132 and 0.0049, respectively.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t09\"]},\"considered_alternatives\":[{\"option\":\"Use auxiliary panels in both output heads\",\"rejected_reason\":\"The panel B branch alone predicts trajectories more accurately than the tested expanded heads.\"}],\"rationale\":\"Build a standalone candidate with the recovered calibration and test each output separately. Compare scalar feature families on measured holdouts, including a high-input-norm slice that can expose unstable interaction terms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "cd05facb30d9377a79e807c176609397f6e18f3b72e00a41a63f203d68346357",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 52520.5,
+      "usage_known": true,
+      "prompt_tokens": 39385,
+      "cached_tokens": 9344,
+      "completion_tokens": 1957
+    }
+  ]
+}

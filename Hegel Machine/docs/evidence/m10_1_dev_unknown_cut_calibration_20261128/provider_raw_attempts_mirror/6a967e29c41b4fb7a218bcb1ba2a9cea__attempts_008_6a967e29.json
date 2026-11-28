@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6a967e29c41b4fb7a218bcb1ba2a9cea",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:22:56.335204+00:00",
+  "ended_at_utc": "2026-11-28T08:23:35.975435+00:00",
+  "request_sha256": "78bc10013f7db4d5dbaff415fb66a3a428a0f24913088a8c1e9c1286c3d0ace7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55903,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34705,
+    "cached_tokens": 9344,
+    "completion_tokens": 1581
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/kprobe.py <<'PY'\\nfrom graphprobe import *\\nfrom itertools import combinations_with_replacement as cr\\nfrom scipy.spatial.distance import cdist\\nT=S['train']; t=S['eval_times']; h=T['traj']; y=T['y']; Y=np.c_[y,h]; ai,af,B,C,D=ops(S); z=ai(T['x']); b=B(z); c=C(z); d=D(z); n=len(z); cd=np.c_[c,d]; dot=(c*d).sum(1)\\ndef p(x,k):return np.stack([np.prod(x[:,i],axis=1) for i in cr(range(x.shape[1]),k)],axis=1)\\nv=-np.expm1(-t[:,None]*np.array([.396,1.7987,5.27])); A=fit(v,h.T).T\\nprint('y~amps',fit(one(A),y),np.std(y-one(A)@fit(one(A),y))); print('summary',T['summary']); print('telemetry',S['telemetry_vec']); print('sv',np.linalg.svd(h,compute_uv=False))\\nF={'lin':z,'quad':p(z,2),'cubic':p(z,3),'cd':cd,'dot':dot[:,None],'CD2':p(cd,2),'cz':(c[:,:,None]*z[:,None,:]).reshape(n,-1),'dz':(d[:,:,None]*z[:,None,:]).reshape(n,-1),'bcd':np.c_[b*c,b*d],'rat':np.c_[c/(1+d*d),d/(1+c*c)],'pow4':p(z,4),'pow5':p(z,5)}\\nfor name,X in F.items():\\n X=one(X); R=np.c_[y,A]-X@fit(X,np.c_[y,A]); print(name,'RMS',R.std(0))\\nbase=np.c_[F['quad'],F['cubic'],cd,dot]; m=one(base); ry=y-m@fit(m,y); rh=h-m@fit(m,h); print('base residual y/h',np.std(ry),rh.std(0),np.linalg.svd(rh,compute_uv=False)); print('resid corr',np.corrcoef(np.c_[ry,rh].T)[0]);\\nfolds=[(np.arange(56),np.arange(56,72))]+[(np.setdiff1d(np.arange(72),ix),ix) for ix in np.array_split(np.random.default_rng(123).permutation(72),5)];\\ndef kernel(X):\\n X=X-X.mean(0); return (X@X.T)/np.mean(np.sum(X*X,axis=1))\\nK={k:kernel(X) for k,X in F.items()};\\nfor key,X in [('z',z),('cd',cd),('all',np.c_[z,cd])]:\\n Q=cdist(X,X,'sqeuclidean');\\n for f in [.3,1,3,9]:K[f'rbf{key}{f}']=np.exp(-f*Q/np.median(Q))\\nK0=K['quad']+K['cubic']+K['cd']+K['dot']; rows=[]\\ndef evalk(G,l):\\n E=[]\\n for tr,te in folds:\\n  A=G[np.ix_(tr,tr)]+l*np.eye(len(tr)); Q=G[np.ix_(te,tr)]; coef= np.linalg.solve(A,np.c_[Y[tr],np.ones(len(tr))]); mu=coef[:,:-1].sum(0)/coef[:,-1].sum(); P=mu+Q@(coef[:,:-1]-coef[:,-1,None]*mu); e=abs(P-Y[te]); E.append([e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean()])\\n E=np.array(E); return E[0],E.mean(0),E.max(0)\\nfor name, G in {'base':K0,'plain':K['quad']+K['cd']+K['dot'],**{k:V for k,V in K.items() if k.startswith('rbf')}}.items():\\n for l in [.001,.01,.06,.25]:\\n  e,m,w=evalk(G,l); rows.append((sum(m[:2]),name,0,l,e,m,w))\\nfor nm,L in {**K,'mix':K['cz']+K['dz']+K['CD2'],'odd':K['lin']+K['dz']+K['cz'],'even':K['CD2']+K['pow4'],'allextra':K['CD2']+K['pow4']+K['cz']+K['dz']+K['rat']}.items():\\n for w in [.003,.02,.1,.5,2]:\\n  for l in [.001,.015,.08]:\\n   e,m,ww=evalk(K0+w*L,l); rows.append((sum(m[:2]),nm,w,l,e,m,ww))\\nprint('Top joint');\\nfor row in sorted(rows)[:20]:print(row)\\nprint('Top y');\\nfor row in sorted(rows,key=lambda x:x[-2][0])[:12]:print(row)\\nprint('Top h');\\nfor row in sorted(rows,key=lambda x:x[-2][1])[:12]:print(row)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/kprobe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 sparse mixed terms -> H2 separate calibrated odd and even feature groups; the previous worst-fold MAEs are 0.5553 for y and 0.4265 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit all cross-terms without regularization\",\"rejected_reason\":\"Adding unrestricted second-order C features lowered training error but substantially increased held-out error.\"}],\"rationale\":\"Compare regularized groups on the same folds to detect which missing interactions improve both outputs. Check whether the scalar and trajectory residuals share structure before choosing a joint or separate readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "e0b04d26269acb8d1dbfaa81dba3562412a5cf0176c9364c8654e502b3c35e81",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42194.43,
+      "usage_known": true,
+      "prompt_tokens": 34705,
+      "cached_tokens": 9344,
+      "completion_tokens": 1581
+    }
+  ]
+}

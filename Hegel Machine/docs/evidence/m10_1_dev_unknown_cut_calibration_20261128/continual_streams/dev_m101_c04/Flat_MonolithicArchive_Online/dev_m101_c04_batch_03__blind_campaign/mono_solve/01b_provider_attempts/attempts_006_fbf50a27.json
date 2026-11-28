@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fbf50a2711654a04ae324e38fc00dc65",
+  "call_seq": 6,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:10:49.444434+00:00",
+  "ended_at_utc": "2026-11-28T08:11:23.794871+00:00",
+  "request_sha256": "a3e61d2fd6ffa5c453660986d54945b705b6a5480f4c72095a2f1adca9d696c6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42063,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26391,
+    "cached_tokens": 9344,
+    "completion_tokens": 1367
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/recover.py <<'PY'\\nfrom grammar import *\\nfrom scipy.optimize import minimize_scalar\\n\\ndef panel(key,out,kind,per=False):\\n p=s[key]; u=p['u']; v=p[out]\\n fun={'sin':np.sin,'tanh':np.tanh,'cos':np.cos}[kind]\\n def feat(x,w):\\n  a=aff(x)\\n  if kind=='cos': a=np.c_[a,quad(x)]\\n  return np.c_[a,fun(x*w)]\\n def r(w):\\n  f=feat(u,w); return (f@ls(f,v)-v).ravel()\\n obj=lambda w: np.mean(r(w)**2)\\n opt=minimize_scalar(obj,bounds=(0.4,5),method='bounded',options={'xatol':1e-9})\\n w=least_squares(r,np.full(4,opt.x),bounds=(0.3,6),gtol=1e-13).x if per else opt.x\\n f=feat(u,w); c=ls(f,v); print(key,out,kind,'w',np.round(w,4),'err',np.round(fit(f,v),7),'norm',np.round(np.linalg.norm(c,axis=1),5))\\n return lambda x:feat(x,w)@c\\n\\ndef cross(x):return x[:,0]*x[:,2]+x[:,1]*x[:,3]\\n\\ndef coords():\\n funcs={}\\n for key,out,kinds in [('panel_b','v',('tanh','sin')),('panel_c','v1',('tanh','sin')),('panel_c','v2',('cos',))]:\\n  for k in kinds:\\n   name={'panel_b':'b','panel_c':'c' if out=='v1' else 'd'}[key]+k[0]; funcs[name]=panel(key,out,k); panel(key,out,k,True)\\n u=s['panel_a']['u']; v=s['panel_a']['v']; pars=[]\\n for ui,vi in zip(u.T,v.T):\\n  i,j=np.triu_indices(len(u),1); g=np.median((vi[i]-vi[j])/(ui[i]-ui[j])); b=np.median(vi-g*ui); keep=abs(vi-g*ui-b)<.001; pars.append(ls(aff(ui[keep]),vi[keep]))\\n b,g=np.array(pars).T; x=(s['train']['x']-b)/g\\n z={'x':x,**{k:f(x) for k,f in funcs.items()}}\\n for a,f in funcs.items():\\n  for b,q in list(z.items())[:6]:\\n   if b!='x': z[a+'('+b+')']=f(q)\\n return z\\n\\ndef scan(z):\\n Y=np.c_[s['train']['y'],s['train']['traj']]; records=[]\\n idx=np.stack([np.arange(72),np.random.default_rng(310).permutation(72),np.random.default_rng(312).permutation(72)])\\n def add(n,F):\\n  e=np.stack([np.mean(abs(Y[i[56:]]-F[i[56:]]@ls(F[i[:56]],Y[i[:56]])),axis=0) for i in idx]); er=np.sqrt(np.mean((Y-F@ls(F,Y))**2,axis=0)); records.append((n,*e[0,[0]],e[0,1:].mean(),e[:,0].max(),e[:,1:].mean(1).max(),er[0],np.mean(er[1:])))\\n for n,x in z.items():\\n  for k,F in [('a',aff(x)),('q',np.c_[aff(x),quad(x)]),('cross',np.c_[aff(x),cross(x)])]:add(n+k,F)\\n keys=list(z)[:6]\\n for a,b in itertools.combinations(keys,2):\\n  x,y=z[a],z[b]; f=np.c_[aff(x),y]; add(a+'+'+b,f); add(a+'+'+b+'prod',np.c_[f,x*y,cross(x),cross(y)]); add(a+'+'+b+'cross',np.c_[f,cross(x),cross(y)])\\n print('columns: name publicY publicT worstY worstT trainRmsY trainRmsT')\\n for k in (1,2,3,4):\\n  print('rank by',k)\\n  for r in sorted(records,key=lambda r:r[k])[:9]:print(r[0],np.round(r[1:],5))\\nif __name__=='__main__':scan(coords())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/recover.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine panel B -> H2 coordinatewise nonlinear auxiliary operators; panel B affine leave-one-out MAE reaches 0.162, while the nonlinear basis reaches 0.0088 pooled leave-one-out RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the lowest-error panel fit without target ablations\",\n      \"rejected_reason\": \"A panel can be precisely recoverable without driving either target; composition order also matters.\"\n    }\n  ],\n  \"rationale\": \"Fit shared and per-coordinate frequencies to distinguish approximate from noise-level panel recovery. Compare direct, parallel, and chained panel features across three 56/16 splits to identify which operators improve each target.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "b4118ebc92527587d32e6bcce5899d3c1ef2f44c02867990cfa127f89c78ddff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36906.01,
+      "usage_known": true,
+      "prompt_tokens": 26391,
+      "cached_tokens": 9344,
+      "completion_tokens": 1367
+    }
+  ]
+}

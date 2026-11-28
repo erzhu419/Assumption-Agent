@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0b126355295d4151a7f3c46580fc3acc",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:25:02.616052+00:00",
+  "ended_at_utc": "2026-11-28T08:25:40.543185+00:00",
+  "request_sha256": "48ff4357e06765c4beedadc59f94b038709b6a3a45ffdcafc1494d9f058953b0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54909,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33208,
+    "cached_tokens": 9344,
+    "completion_tokens": 1543
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/tied05.py <<'PY'\\nimport numpy as np,pickle,importlib.util\\nfrom scipy.optimize import least_squares\\np='/tmp/hegel_continual_archive/dev_m101_c04_batch_03_solver.py'; sp=importlib.util.spec_from_file_location('arch',p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; y=t['y']; ls=m._ls; aff=m._affine\\na,g=m._calibrate(s['panel_a']); u=(t['x']-a)/g; z=m._operator(s['panel_b'])(u); rng=np.random.default_rng(912); folds=[np.arange(72)]+[rng.permutation(72) for _ in range(5)]; folds.append(np.argsort(np.linalg.norm(z,axis=1)))\\nnp.set_printoptions(precision=5,suppress=True)\\nc=s['panel_c']; print('times',s['eval_times'],'telemetry',s['telemetry_vec']);\\nfor k in ['v1','v2']:\\n f=aff(c['u']); print(k,'affine rmse',np.std(c[k]-f@ls(f,c[k])), 'scale',np.std(c[k]),'coefs',ls(f,c[k]).round(3))\\nA=aff(z); cross=np.c_[z[:,0]*z[:,2],z[:,1]*z[:,3]]; modes={'tanh':np.tanh,'atan':np.arctan,'asinh':np.arcsinh,'rational':lambda w:w/(1+w*w),'softsign':lambda w:w/np.sqrt(1+w*w),'erf':__import__('scipy.special',fromlist=['erf']).erf,'sin':np.sin,'rational3':lambda w:w**3/(1+w*w),'log':lambda w:np.sign(w)*np.log1p(abs(w)),'exp':lambda w:np.sign(w)*-np.expm1(-abs(w))}\\nfor mode,h in modes.items():\\n for tied_cross in [True,False]:\\n  C=cross.sum(1,keepdims=True) if tied_cross else cross; B=aff(C)\\n  def pred(tr,ret=False):\\n   def des(p):\\n    w=A@p; return np.c_[B,w,h(w)]\\n   def r(p):\\n    D=des(p)[tr]; return D@ls(D,y[tr])-y[tr]\\n   w=ls(np.c_[A,C][tr],y[tr])[:5]; w[0]=0\\n   opt=min((least_squares(r,w*k,bounds=(-15,15),max_nfev=120) for k in [.65,1.4,2.3]),key=lambda o:o.cost); D=des(opt.x); b=ls(D[tr],y[tr]); pred=D@b\\n   return (np.std(pred-y),opt.x,b) if ret else pred\\n  print(mode,tied_cross,[round(abs(pred(i[:56])[i[56:]]-y[i[56:]]).mean(),6) for i in folds],pred(np.arange(72),True))\\n# Check whether a single index applied to the affine-plus-cross expression accounts for remaining residuals.\\nfor mode,h in {k:modes[k] for k in ['tanh','atan','rational','softsign','erf','sin']}.items():\\n for vary in [0,1,2]:\\n  X=np.c_[A,cross.sum(1)] if vary else np.c_[A,cross]; B=aff(cross.sum(1)) if vary==2 else np.ones((len(y),1))\\n  def pred(tr,ret=False):\\n   def des(p):\\n    w=X@p;return np.c_[B,w,h(w)]\\n   def r(p):\\n    D=des(p)[tr];return D@ls(D,y[tr])-y[tr]\\n   init=ls(X[tr],y[tr]); opt=min((least_squares(r,init*k,max_nfev=150,bounds=(-15,15)) for k in [.55,1.2,2.3]),key=lambda o:o.cost); D=des(opt.x); b=ls(D[tr],y[tr]); prediction=D@b\\n   return (np.std(prediction-y),opt.x,b) if ret else prediction\\n  print('inside',mode,vary,[round(abs(pred(i[:56])[i[56:]]-y[i[56:]]).mean(),6) for i in folds],pred(np.arange(72),True))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/tied05.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (separate linear and saturating directions) -> H2 (one shared scalar projection with paired cross-products); the rational lead has worst-split scalar MAE 0.0121, and direct trajectory regression has worst-split MAE 0.004834.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Finalize the unrestricted rational single-index readout\",\n      \"rejected_reason\": \"Its fitted nonlinear direction is nearly proportional to its linear direction, and the two cross-product coefficients are nearly equal. Test whether tying them improves prediction at the largest panel-B amplitudes.\"\n    }\n  ],\n  \"rationale\": \"Fit the shared-index alternatives within each split. Comparing cross-products inside and outside the nonlinear response will show whether a smaller readout preserves the gain; the high-amplitude split will expose extrapolation failures missed by random splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "1ab3699ccb754151ec846fa41789b7325ef0bfdb8e70ec715f22b046174bc716",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40479.45,
+      "usage_known": true,
+      "prompt_tokens": 33208,
+      "cached_tokens": 9344,
+      "completion_tokens": 1543
+    }
+  ]
+}

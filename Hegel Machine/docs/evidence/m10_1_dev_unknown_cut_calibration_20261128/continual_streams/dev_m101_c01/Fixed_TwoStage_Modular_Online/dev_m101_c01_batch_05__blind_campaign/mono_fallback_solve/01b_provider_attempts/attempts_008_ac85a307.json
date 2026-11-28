@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ac85a3073a8c497c8e7ff702d76533b4",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Fixed_TwoStage_Modular_Online__dev_m101_c01_batch_05__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:18:43.931292+00:00",
+  "ended_at_utc": "2026-11-28T08:19:18.938427+00:00",
+  "request_sha256": "b0d4d64eada6749994fd13a1c2b13787fd64a20e3d681c87cb1e5a28c2e698f7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53791,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33645,
+    "cached_tokens": 9344,
+    "completion_tokens": 1375
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/ridgeprobe.py <<'PY'\\nfrom spatial import *\\nfrom scipy.linalg import solve\\nfrom itertools import product\\nY=np.c_[y,z]; t=s['eval_times']; C=L(phi(x,2),Y); print('time',t,'tele',s['telemetry_vec'],'summary',s['train']['summary']); print('linear',C[:5,[0,1,4,8]].T); print('quadratic singular',np.linalg.svd(C[5:],compute_uv=False));\\nfor j in [0,1,4,8]:\\n h=np.zeros((4,4)); h[np.triu_indices(4)]=C[5:,j]; print(j,np.linalg.eigh((h+h.T)/2))\\n# Test whether a neglected cubic or quartic term is identifiable from training residuals.\\nJ0=np.arange(56,72); folds=[J0,np.arange(16),np.arange(28,44),np.argsort(np.linalg.norm(x,axis=1))[-16:]]\\nw=coords(x); X=phi(x,2); \\nfor name,q in w.items():\\n P=phi(q,4)[:,15:]; R=Y-X@L(X,Y); P=P-X@L(X,P); P/=np.maximum(P.std(0),1e-8); corr=P.T@R/len(x); inds=np.argsort(np.linalg.norm(corr/R.std(0),axis=1))[-8:]; print(name,'top cub/quart',[(list(cw(range(4),3))[i] if i<20 else list(cw(range(4),4))[i-20],np.round(corr[i,[0,1,4,8]],4)) for i in inds])\\n# Profile out the linear coefficients of a small number of spatial ridge terms.\\ndef model(q,T,I,r,fn,deg):\\n Q=phi(q,deg); scale=np.maximum(T[I].std(0),1e-7); T=T/scale\\n Q0=Q[I]; u=np.linalg.qr(Q0)[0]; de=lambda v:v-u@(u.T@v); E=de(T[I]);\\n rng=np.random.default_rng(154); starts=[]\\n for k in range(18):\\n  p=rng.normal(size=(r,5)); p[:,0]*=.9; p[:,1:]*=(.55 if k<9 else 1.05); starts.append(p.ravel());\\n def extra(q,p):\\n  p=p.reshape(r,5); a=p[:,0]+q@p[:,1:].T; return fn(a)\\n def err(p):\\n  F=de(extra(q[I],p)); b=L(F,E); return np.r_[(F@b-E).ravel(),.008*p]\\n opt=min((least_squares(err,p,bounds=(-6,6),max_nfev=105,ftol=3e-6) for p in starts),key=lambda a:a.cost); M=np.c_[Q,extra(q,opt.x)]; return (M@L(M[I],T[I]))*scale,opt.x\\nfor out in ['y','z','both']:\\n for r,deg,f in product([1,2,3],[1,2],['tanh','sin','rat']):\\n  ee=[]; para=[]\\n  for J in folds:\\n   I=np.setdiff1d(np.arange(72),J); _,_,V=np.linalg.svd(z[I],full_matrices=False); V=V[:2]; T={'y':Y[:,:1],'z':z@V.T,'both':np.c_[y,z@V.T]}[out]; pred,p=model(x,T,I,r,{'tanh':np.tanh,'sin':np.sin,'rat':lambda a:1/(1+a*a)}[f],deg); pred=pred if out=='y' else pred@V if out=='z' else np.c_[pred[:,0],pred[:,1:]@V]; G={'y':Y[:,:1],'z':z,'both':Y}[out]; e=abs(pred-G); ee.append(np.r_[e[I].mean(),e[J].mean(),e[J,-1].mean()]); para.append(p)\\n  print(out,r,deg,f,np.round(np.array(ee).T,5).tolist(),np.round(para[0],2).tolist(),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ridgeprobe.py >/tmp/ridgeprobe.log; head -35 /tmp/ridgeprobe.log; tail -54 /tmp/ridgeprobe.log\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 broad panel-feature kernels -> H2 compact shared spatial ridge terms; the panel-fed models reached worst-slice MAEs of 0.0582 for scalar output and 0.0122 for trajectory, using separate models.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Increase polynomial degree without structural constraints\",\"rejected_reason\":\"Raw cubic and quartic models reduced training error but worsened the first held-out scalar MAE.\"}],\"rationale\":\"The trajectory has two dominant modes, but the raw quadratic residuals still carry shared signal. Compare compact ridge corrections and inspect the leading polynomial terms to see whether a small spatial law improves both ordinary and high-norm held-out rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "756e05761d2e7f3b59c9a3eef111b58c3e6faa601f52adbf88f3ed02fde52bed",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37534.01,
+      "usage_known": true,
+      "prompt_tokens": 33645,
+      "cached_tokens": 9344,
+      "completion_tokens": 1375
+    }
+  ]
+}

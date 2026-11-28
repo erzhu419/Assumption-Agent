@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "de0c155db63d465b8bc2385505dfd696",
+  "call_seq": 5,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Flat_MonolithicArchive_Online__dev_m101_c03_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:25:49.706254+00:00",
+  "ended_at_utc": "2026-11-28T08:26:11.881556+00:00",
+  "request_sha256": "532a59cb8e572e9c9f60cf0c828b014f13f0c93759e7f23cfa56bf8e2daf5816",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41685,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27379,
+    "cached_tokens": 9344,
+    "completion_tokens": 824
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,66p' /tmp/hegel_continual_archive/dev_m101_c03_batch_03_solver.py; sed -n '1,60p' /tmp/hegel_continual_archive/dev_m101_c03_batch_05_solver.py; cat >/tmp/cal06.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef ls(x,y):return np.linalg.lstsq(x,y,rcond=None)[0]\\ndef calterms(z,shift=-1,kind=0):\\n w=np.roll(z,shift,axis=-1)\\n cols=[np.ones_like(z),z,w,z*w,z**3]\\n if kind==1:cols += [w*w,z*z,z*z*w,z*w*w,w**3]\\n if kind==2:cols += [np.roll(z,-2,axis=-1),z*np.roll(z,-2,axis=-1),w*w,z*z,z*z*w,z*w*w,w**3]\\n return np.stack(cols,axis=-1)\\ndef calibrate(kind=0,shift=-1):\\n u,v=s['panel_a'].values();f=calterms(u,shift,kind);rng=np.random.default_rng(8311);best=(np.inf,None,None)\\n def fit(ix):return np.stack([ls(f[ix,j],v[ix,j]) for j in range(4)])\\n for _ in range(150):\\n  ix=rng.choice(len(u),max(f.shape[-1]+2,9),False)\\n  for k in range(5):\\n   a=fit(ix);err=np.linalg.norm(np.sum(f*a,axis=-1)-v,axis=1);ix=np.argsort(err)[:40]\\n  e=np.mean(err[ix]**2)**.5\\n  if e<best[0]:best=e,a,err\\n return best\\nif __name__=='__main__':\\n np.set_printoptions(precision=5,suppress=True)\\n for shift in (-1,1):\\n  for kind in (0,1,2):\\n   e,a,r=calibrate(kind,shift);print('A',shift,kind,e,'ordered',np.sort(r)[35:],'coef',a)\\n for name,a in [('train',s['train']['x']),('test',s['test']['x'])]: print(name,'x quantiles',np.quantile(a,[0,.05,.5,.95,1],axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal06.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Cyclic nonlinear calibration → panel C pair products and cosine features driving three relaxation modes; archived 56/16 MAEs are 0.410823 for y and 0.261389 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit the full quadratic panel C map\",\"rejected_reason\":\"Only four pair-product terms have coefficients above the measurement noise.\"}],\"rationale\":\"Check the cyclic calibration basis against trimmed row residuals. A noise-level fit will justify inverting it rather than extrapolating from an approximate affine map.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "93971fb10b78028c8926a3dbf36318ad03f5b18059fa02c115d3d570816b656c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24715.7,
+      "usage_known": true,
+      "prompt_tokens": 27379,
+      "cached_tokens": 9344,
+      "completion_tokens": 824
+    }
+  ]
+}

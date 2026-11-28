@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d9b9c763b9404d969f931cbae967ba0e",
+  "call_seq": 12,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Fixed_TwoStage_Modular_Online__dev_m101_c02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:38:22.095523+00:00",
+  "ended_at_utc": "2026-11-28T08:38:55.961880+00:00",
+  "request_sha256": "a0337132b67f1220745f76d2bf3316a47ee1740a20217bc2d309e748a81687dc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 81216,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43130,
+    "cached_tokens": 9344,
+    "completion_tokens": 1359
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace('from itertools import combinations\\\\n', '')\\na = s.index('def _kernel_options(')\\nb = s.index('def solve_batch(', a)\\ns = s[:a] + '''def _kernel_options(x, z, n):\\n    def distance(a):\\n        a = a / a[:n].std(axis=0)\\n        return cdist(a, a, 'sqeuclidean') / a.shape[1]\\n\\n    dx, dz = distance(x), distance(z)\\n    ds = distance(np.sin(2.8*x))\\n    for bandwidth in (.24, .34, .48, .68, .96, 1.36, 1.92):\\n        scale = 2*bandwidth**2\\n        yield np.exp(-(.5*dx + .5*ds)/scale)\\n        yield np.exp(-(.5*dx + .25*dz + .25*ds)/scale)\\n\\n\\ndef _predict(x, z, y):\\n    n = len(y)\\n    h = _affine(z)\\n    design = h[:n]\\n    eye = np.eye(n)\\n    scores, predictions = [], []\\n    for k in _kernel_options(x, z, n):\\n        for ridge in (.001, .005, .02, .08, .32, 1.28):\\n            factor = cho_factor(k[:n, :n] + ridge*eye, check_finite=False)\\n            inverse = cho_solve(factor, eye, check_finite=False)\\n            g = inverse @ design\\n            trend = np.linalg.solve(design.T @ g, g.T)\\n            precision = inverse - g @ trend\\n            weights = precision @ y\\n            # The projected precision gives deleted-row residuals with the affine trend refitted.\\n            loo = np.abs(weights / np.diag(precision)[:, None])\\n            scores.append(loo[:, 0].mean() + 1.4*loo[:, 1:].mean() + .2*loo[:, -1].mean())\\n            predictions.append(k[n:, :n] @ weights + h[n:] @ (trend @ y))\\n    scores = np.array(scores)\\n    blend = np.exp(-(scores - scores.min())/.006)\\n    return np.einsum('m,mij->ij', blend/blend.sum(), predictions)\\n\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\npython3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\npath='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',path+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(path+'public_batch.pkl','rb'))[0]['study']; t=s['train']; x,z=m._coordinates(s,t['x']); y=np.c_[t['y'],t['traj']]; n=len(x)\\nbase=[np.arange(n)]+[np.random.default_rng(k).permutation(n) for k in range(16)]\\nstress=[np.argsort(np.linalg.norm(q/q.std(0),axis=1)) for q in (x,z)]+[np.argsort(abs(q[:,j]-q[:,j].mean())) for q in (x,z) for j in range(4)]\\ndef errors(rows):\\n out=[]\\n for ii in rows:\\n  a,b=ii[:56],ii[56:]\\n  fold={**s,'train':{k:t[k][a] for k in ('x','y','traj')},'test':{'x':t['x'][b]}}\\n  r=m.solve_batch(fold); e=abs(np.c_[r['y_hat'],r['state_pred']]-y[b]); out.append([e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean()])\\n return np.array(out)\\na,b=errors(base),errors(stress)\\nprint('MAE [scalar, trajectory, terminal]: 56/16',a[0], 'random worst',a.max(0),'stress worst',b.max(0))\\nassert np.all(a.max(0)<[.094,.053,.077]) and np.all(b.max(0)<[.182,.071,.099])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: broad joint and pairwise kernel search → H2: harmonic-coordinate kernels with concentrated averaging; the challenger’s worst stress-slice MAEs were 0.17956 scalar, 0.06796 trajectory, and 0.09602 terminal state.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the broader model library\",\n      \"rejected_reason\": \"The harmonic-only library matched or improved the broad library on regular holdouts, with comparable worst-case error on extreme slices.\"\n    }\n  ],\n  \"rationale\": \"Promote the narrower tested library. Run the public schema check and repeat the holdouts through the saved entry point to catch implementation differences that would erase the observed improvement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "5bde94770822dbca570cd1fb1e6965d8549b1070dd1c42b353723d50215417d6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36465.8,
+      "usage_known": true,
+      "prompt_tokens": 43130,
+      "cached_tokens": 9344,
+      "completion_tokens": 1359
+    }
+  ]
+}

@@ -1,0 +1,136 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_m101_c03_batch_04_25d872797434",
+    "source_hash": "25d8727974344ddaa9b8554565eb3769a82760608f9c406ca633220d8b1c8cde",
+    "parent_ids": [],
+    "source_episode_id": "mono_solve",
+    "task_id": "dev_m101_c03_batch_04__blind_campaign",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/check04.py",
+        "archived_relpath": "producers/tmp__check04.py",
+        "bytes": 1637,
+        "sha256": "9c6abe8c4625890464b52955c3eaa121ba0e48b610260c1ce1682978ce1bca98"
+      },
+      {
+        "container_path": "/tmp/probe04.py",
+        "archived_relpath": "producers/tmp__probe04.py",
+        "bytes": 2236,
+        "sha256": "5d14926d75ccff97dcf7d6e5e47be6d6ae3a09225688f39487fd70338da8e9e4"
+      },
+      {
+        "container_path": "/tmp/probe04b.py",
+        "archived_relpath": "producers/tmp__probe04b.py",
+        "bytes": 2540,
+        "sha256": "768cd7005eef89e30c6e68093f380acf7c802f89b6af47c69d77148c5bcbb69f"
+      },
+      {
+        "container_path": "/tmp/probe04c.py",
+        "archived_relpath": "producers/tmp__probe04c.py",
+        "bytes": 1995,
+        "sha256": "53261a434d6968cb32526057b187d89ba8c0504774b694da2a149f28346f79d5"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m101_c03_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m101_c03_batch_00_solver.py",
+        "bytes": 3224,
+        "sha256": "a40d41add52bbafad292a47e5d3c1b05651b7fa7cc4c0f34f593f6f2c755cc98"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m101_c03_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m101_c03_batch_01_solver.py",
+        "bytes": 2593,
+        "sha256": "65f871cd790e622caadee5894e816710c7155f86e4b8ca83c911649541a1931d"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m101_c03_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m101_c03_batch_02_solver.py",
+        "bytes": 3335,
+        "sha256": "b1dab11bfacf4effdb8f64cc094532b704f75b9bc2b6b441e2977338d9869c92"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m101_c03_batch_03_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m101_c03_batch_03_solver.py",
+        "bytes": 3655,
+        "sha256": "a7f47957033bf7da77213a232f2c824235fbbc4a437d8ea27da8fecd1862e113"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lh /tmp/hegel_continual_archive/*.py; for f in /tmp/hegel_continual_archive/*c03_batch_0{1,2,3}_solver.py; do echo ===$f; grep -nE '^def |^class |^import |^from ' \"$f\"; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference-panel alignment robust IRLS' 2>&1 | head -30; cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as n\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; n.set_printoptions(precision=4,suppress=True,linewidth=140)\nprint('t',s['eval_times'],'tel',s['telemetry_vec'],'summary',s['train']['summary'])\nfor k in ('panel_a'",
+      "cat /tmp/hegel_continual_archive/*_solver.py; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations, combinations_with_replacement\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']\nfor k in ('panel_a','panel_c'):\n p=s[k]; u=p['u']; n,d=u.shape\n for name,v in p.items():\n  if name=='u':continue\n  print(k,name,'output ranges',v.min(0),v.max(0),'norm quantiles',np.quantile(np.linalg.norm(v,axis=1),[0,.25,.5,.75,1])); print(np.round(np.c_[u,v][:6],3))\n  cols=[('aff',np.c_[np.ones(n),u]),('cross',np.c_[np.ones(n),u,*[u[:,i]*u[:,",
+      "cat > /tmp/probe04.py <<'PY'\nimport pickle,itertools,numpy as np\nfrom scipy.optimize import least_squares\nS=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; fit=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\ndef basis(x,degree=2,cross=False):\n    return np.column_stack([np.ones(len(x))]+[np.prod(x[:,j],axis=1) for k in range(1,degree+1) for j in (itertools.combinations(range(4),k) if cross else itertools.combinations_with_replacement(range(4),k))])\ndef calibrate(s,x):\n    p=s['panel_a'];u,v=p['u'],p['v']; coeff=[]\n    for a,b in zip(u.T,v.T):\n        i,j=np.triu_indices(len",
+      "cat > /tmp/probe04b.py <<'PY'\nexec(open('/tmp/probe04.py').read().split(\"p=S['panel_c']\")[0])\nfrom scipy.optimize import minimize_scalar\np=S['panel_c']; u=p['u']; V=p['v2']; X=calibrate(S,S['train']['x']); t=S['eval_times']; T=S['train']['traj']; y=S['train']['y']\nprint('sorted y',np.round(np.sort(y),5)); print('repeated values',len(np.unique(y)))\nforms={'cos':lambda x,k:np.cos(k*x), 'sin2':lambda x,k:np.sin(k*x*x), 'cos2':lambda x,k:np.cos(k*x*x), 'exp':lambda x,k:np.exp(-k*x*x),'rational':lambda x,k:1/(1+k*x*x),'tanh2':lambda x,k:np.tanh(k*x)**2,'tanh_sq':lambda x,k:np.tanh(k*x*x),'cosh_inv'",
+      "cat > /tmp/probe04c.py <<'PY'\nexec(open('/tmp/probe04.py').read().split(\"p=S['panel_c']\")[0])\nfrom scipy.optimize import minimize_scalar\np=S['panel_c']; u=p['u']; X=calibrate(S,S['train']['x']); t=S['eval_times']; T=S['train']['traj']; y=S['train']['y']; pairs=[(0,1),(0,3),(1,2),(2,3)]\nc1=lambda x:np.c_[np.ones(len(x)),*[x[:,i]*x[:,j] for i,j in pairs]]\nc2=lambda x,k:np.c_[np.ones(len(x)),np.cos(k*x)]\nA=c1(X)@fit(c1(u),p['v1']); k=minimize_scalar(lambda k:np.linalg.norm(c2(u,k)@fit(c2(u,k),p['v2'])-p['v2']),bounds=(1.5,3.1),method='bounded').x; B=c2(X,k)@fit(c2(u,k),p['v2'])\nL=np.c_[np.ones(le",
+      "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Panel-calibrated prediction with two shared relaxation modes.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares, minimize_scalar\n\n\ndef _fit(design, target):\n    return np.linalg.lstsq(design, target, rcond=None)[0]\n\n\ndef _calibrate(panel, x):\n    u, v = panel['u'], panel['v']\n    i, j = np.triu_indices(len(u), 1)\n    coeff = []\n    for raw, observed in zip(u.T, v.T):\n        dx = raw[i] - raw[j]\n        keep = dx != 0\n        gain = np.median((observed[i] - observed[j])[keep] / dx[keep])\n        residual = observed - gain * raw\n       ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy, numpy as np\nm = runpy.run_path('/holdout_task/batch_solver.py')\ns = pickle.load(open('public_batch.pkl','rb'))[0]['study']\nd = s['train']; n = len(d['x']); ix = np.arange(n)\np = s['panel_c']; u = p['u']; fit = m['_fit']\nfor name, cols in [('affine',u),('pairwise',np.column_stack([u[:,i]*u[:,j] for i,j in [(0,1),(0,3),(1,2),(2,3)]]))]:\n    A = np.column_stack((np.ones(len(u)),cols)); err=[]\n    for te in np.array_split(np.arange(len(u)),4):\n        tr = np.setdiff1d(np.arange(len(u)),te); err.append(np.sqrt(np."
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__dev_m101_c03_batch_03_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/dev_m101_c03_batch_03_solver.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 2911,
+        "sha256": "72e2ca2f1a947b3f5ea17fb63e3e40bb17228a2da5d2cce865aa81df3ec197ca",
+        "content_addressed_ref": "content_addressed_blobs/72e2ca2f1a947b3f5ea17fb63e3e40bb17228a2da5d2cce865aa81df3ec197ca.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "25d8727974344ddaa9b8554565eb3769a82760608f9c406ca633220d8b1c8cde",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy, numpy as np\nm = runpy.run_path('/holdout_task/batch_solver.py')\ns = pickle.load(open('public_batch.pkl','rb'))[0]['study']\nd = s['train']; n = len(d['x']);",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "25d8727974344ddaa9b8554565eb3769a82760608f9c406ca633220d8b1c8cde",
+        "expected_candidate_sha256": "25d8727974344ddaa9b8554565eb3769a82760608f9c406ca633220d8b1c8cde",
+        "computed_candidate_sha256": "25d8727974344ddaa9b8554565eb3769a82760608f9c406ca633220d8b1c8cde",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 2911
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_25d87279"
+    }
+  },
+  "structure": {
+    "full_producer_count": 8,
+    "reusable_ast_function_closures": []
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "808bce7e9d344d5eb93ff5b7276d0acd",
+  "call_seq": 12,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:20:15.955499+00:00",
+  "ended_at_utc": "2026-11-28T08:20:43.031044+00:00",
+  "request_sha256": "6649fc6365c1bb1be98f2f6b78507bf3e2277f9a85d50ca396d2d1719049c92f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67364,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38153,
+    "cached_tokens": 9344,
+    "completion_tokens": 1011
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/solver_baseline.py\\npython3 - <<'PY'\\np='/tmp/solver_baseline.py'\\ns=open(p).read(); pos='    y, state = pred[:, 0], pred[:, 1:] @ b.T'\\ninsert='''    # Blend a smoother residual for the trajectory amplitudes, where\\n    # the shorter-range kernel is less reliable beyond the training cloud.\\n    q, qt = _quadratic(x), _quadratic(xt)\\n    ds = cdist(x / scale, x / scale, 'sqeuclidean') / x.shape[1]\\n    dt = cdist(xt / scale, x / scale, 'sqeuclidean') / x.shape[1]\\n    smooth = q @ q.T + 0.035 * np.exp(-0.45 * ds) + np.eye(n) * 1e-5\\n    amplitudes = (qt @ q.T + 0.035 * np.exp(-0.45 * dt)) @ cho_solve(cho_factor(smooth), target[:, 1:])\\n    pred[:, 1:] = 0.65 * pred[:, 1:] + 0.35 * amplitudes\\n'''\\nassert pos in s\\nopen('/tmp/solver_blend.py','w').write(s.replace(pos,insert+pos))\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /tmp/solver_cv.py /tmp/solver_baseline.py --extra > /tmp/baseline_cv.txt\\npython3 -I /tmp/solver_cv.py /tmp/solver_blend.py --extra > /tmp/blend_cv.txt\\npython3 - <<'PY'\\nimport numpy as np, re, shutil\\npaths=['/tmp/solver_baseline.py','/tmp/solver_blend.py']\\na=[]\\nfor name in ('baseline','blend'):\\n lines=open('/tmp/'+name+'_cv.txt').readlines()[:14]; e=np.array([np.fromstring(re.search(r'\\\\[([^]]+)\\\\]',line)[1],sep=' ') for line in lines]); a.append(e)\\n print(name, 'gate',e[0], 'ordinary worst',e[:6].max(0), 'edge worst',e[6:].max(0))\\nb,c=a\\npromote=(c[6:,1].max() <= .9*b[6:,1].max() and np.all(c[:6,1:].max(0) <= b[:6,1:].max(0)+.001) and c[6:,2].max() <= b[6:,2].max()+.001)\\nif promote: shutil.copyfile(paths[1],'/holdout_task/batch_solver.py')\\nprint('selected', 'blend' if promote else 'baseline')\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated coordinates and damped rank-two dynamics → H2 a smoother trajectory residual for extrapolation; the verified baseline’s worst directional MAEs are 0.08641 scalar, 0.04100 trajectory, and 0.02915 terminal state.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the trajectory kernel outright with the smoother kernel\",\n      \"rejected_reason\": \"It reduced worst directional trajectory MAE but raised worst ordinary trajectory MAE from 0.00960 to 0.01697.\"\n    }\n  ],\n  \"rationale\": \"Check whether blending reduces the observed directional trajectory failure without materially worsening ordinary or terminal predictions. Keep the verified baseline if it does not, and run the schema validator on the selected artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "ae9eeefe2ef233dfb6bfcff95e543abdc828871b7bb9c1186538d359a85e0966",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29580.44,
+      "usage_known": true,
+      "prompt_tokens": 38153,
+      "cached_tokens": 9344,
+      "completion_tokens": 1011
+    }
+  ]
+}

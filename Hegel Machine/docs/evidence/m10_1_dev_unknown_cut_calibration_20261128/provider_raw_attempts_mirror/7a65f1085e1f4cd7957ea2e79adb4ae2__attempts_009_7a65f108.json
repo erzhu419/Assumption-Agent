@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7a65f1085e1f4cd7957ea2e79adb4ae2",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Flat_MonolithicArchive_Online__dev_m101_c02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:28:02.376272+00:00",
+  "ended_at_utc": "2026-11-28T08:28:49.494760+00:00",
+  "request_sha256": "d6b36aca4333855c5c5346207e89985319ce91858d06f6fecf4623a21319637c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55991,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32765,
+    "cached_tokens": 9344,
+    "completion_tokens": 2072
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated panel-B transform and two independent response readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _fit(study, weight=.7, starts=None):\\n    a, b = study['panel_a'], study['panel_b']\\n    ok = np.max(abs(a['u']-a['v']), axis=1) < 1\\n    u, v = a['u'][ok], a['v'][ok]\\n    du = u-u.mean(axis=0)\\n    gain = np.sum(du*(v-v.mean(axis=0)), axis=0)/np.sum(du**2, axis=0)\\n    offset = (v-u*gain).mean(axis=0)\\n    t = study['eval_times']\\n    data = study['train']\\n    x, y, traj = (data[k] for k in ('x', 'y', 'traj'))\\n    w = (x-offset)/gain\\n\\n    def transform(x, p):\\n        k, power, linear = p[:3]\\n        z = x**3/(1+k*np.abs(x)**power)+linear*x\\n        for amplitude, frequency in p[3:].reshape(-1, 2):\\n            z += amplitude*np.sin(frequency*x)\\n        return _affine(z)\\n\\n    def scalar(z):\\n        return np.column_stack((_affine(z), z[:, 0]*z[:, 2]+z[:, 1]*z[:, 3]))\\n\\n    def link(d, p):\\n        h = d@p\\n        return np.column_stack((np.ones(len(h)), h, np.arctan(h)))\\n\\n    def time_basis(p):\\n        return np.column_stack((np.log1p(p[0]*t), -np.expm1(-p[1]*t)))\\n\\n    def coordinates(p, query):\\n        panel = transform(b['u'], p)\\n        operator = _ls(panel, b['v'])\\n        return transform(query, p)@operator, panel@operator-b['v']\\n\\n    def profile(p, output=False):\\n        z, rp = coordinates(p[:-8], w)\\n        a = _affine(z)\\n        d = link(scalar(z), p[-8:-2])\\n        tb = time_basis(p[-2:])\\n        cy = _ls(d, y)\\n        ct = _ls(a, _ls(tb, traj.T).T)\\n        if output:\\n            return cy, ct, tb\\n        return np.r_[rp.ravel(), weight*(d@cy-y), weight*(a@ct@tb.T-traj).ravel()]\\n\\n    if starts is None:\\n        starts = [[.573, 2.265, -.092, .0086, 9.92, .004, 13.27]]\\n    fits = []\\n    for start in starts:\\n        start = np.asarray(start)\\n        n = (len(start)-3)//2\\n        z, _ = coordinates(start, w)\\n        ini = _ls(scalar(z), y)\\n        lo = np.r_[[.01, .7, -2], [-.25, 2]*n, [-100]*6, [.01, .01]]\\n        hi = np.r_[[30, 4, 2], [.25, 34]*n, [100]*6, [10, 10]]\\n        for scale in (.7, 1.5):\\n            init = np.r_[start, ini*scale, [1.4, .7]]\\n            fits.append(least_squares(profile, init, bounds=(lo, hi), max_nfev=220))\\n    opt = min(fits, key=lambda fit: fit.cost)\\n    params = opt.x\\n    cy, ct, tb = profile(params, True)\\n\\n    def predict(query):\\n        z, _ = coordinates(params[:-8], (query-offset)/gain)\\n        return link(scalar(z), params[-8:-2])@cy, _affine(z)@ct@tb.T\\n\\n    return predict, params, cy\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    predict, _, _ = _fit(study)\\n    y, state = predict(study['test']['x'])\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\ncat >/tmp/cv05.py <<'PY'\\nimport pickle,sys,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _fit\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; d=s['train']; x,y,T=(d[k] for k in ('x','y','traj')); rng=np.random.default_rng(53)\\nfolds=[np.arange(72),*[rng.permutation(72) for _ in range(4)],np.argsort(np.max(abs(x-np.median(x,axis=0)),axis=1)),np.argsort(abs(y-np.median(y)))];\\nbases=[[.573,2.265,-.092,.0086,9.92,.004,13.27],[11.86,1.101,-.02345,.001585,8.83,.000741,12.64,-.000136,20.25],[13.86,1.09,-.02049,.001375,8.864,.000629,12.68,-.000122,20.32,.000055,28.04],[7.59,2.355,-.09492,.00312,9.631,.000627,13.545,-.00005,21.5,.00966,5.90]]\\nfor pair in [('core',.7,bases[:1]),('core-low',.25,bases[:1]),('three',.5,bases[1:2]),('four-high',.5,bases[2:3]),('four-low',.5,bases[3:])]:\\n name,weight,starts=pair; out=[]\\n for idx in folds:\\n  i,j=idx[:56],idx[56:]; sub=dict(s,train={**d,**{k:d[k][i] for k in ('x','y','traj')}}); f,p,cy=_fit(sub,weight,starts); yp,tp=f(x[j]); out.append([np.mean(abs(yp-y[j])),np.mean(abs(tp-T[j])),np.max(np.mean(abs(tp-T[j]),axis=0))]);\\n  if len(out)==1:print(name,'params',p,'link',cy,flush=True)\\n print(name,np.round(out,6),flush=True)\\nt=s['eval_times']; b=np.c_[np.log1p(1.41246*t),-np.expm1(-.69078*t)]; r=T-np.linalg.lstsq(b,T.T,rcond=None)[0].T@b.T; print('trajectory orthogonal residual',np.std(r),np.max(abs(r)),np.linalg.svd(r,compute_uv=False))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cv05.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: two-harmonic panel B -> H2: test higher-harmonic initializations and extrapolation; prior worst four-split MAEs were 0.00626 scalar and 0.00535 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\",\"ng_t07\"]},\"considered_alternatives\":[{\"option\":\"Select by panel fit alone\",\"rejected_reason\":\"Additional harmonics lower panel residuals but can worsen scalar predictions on withheld rows.\"}],\"rationale\":\"Save the validated model structure, then compare higher-harmonic fits on random, high-amplitude input, and extreme-response splits. Check trajectory projection residuals separately to distinguish time-basis error from spatial readout error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d3e4764fc630e9bb011841273176e15fbc73f76da8004cc939259713a5ece805",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 52261.99,
+      "usage_known": true,
+      "prompt_tokens": 32765,
+      "cached_tokens": 9344,
+      "completion_tokens": 2072
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0833fbbb75ec4751a4c0a99d7ff8dd52",
+  "call_seq": 5,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__stageS__dev_m101_c04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:51:13.751236+00:00",
+  "ended_at_utc": "2026-11-28T07:51:43.147128+00:00",
+  "request_sha256": "0444842ad0c12abe34fe8086bc757c3bfe181ef3e3a478028c263cf4dd82d4fb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38376,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28674,
+    "cached_tokens": 10880,
+    "completion_tokens": 1158
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1; sed '/^for name,h in bases.items()/,$d' /tmp/paneltest.py > /tmp/cv.py; cat >> /tmp/cv.py <<'PY'\\nfrom scipy.optimize import least_squares\\nz=bases['AiB']; L=lin(z); p=z[:,0]*z[:,2]; q=z[:,1]*z[:,3]; XX={'full':np.c_[L,quad(z)],'pair':np.c_[L,p,q],'shared':np.c_[L,p+q],'fixed18':L};\\ndef expo(params,t): return -np.expm1(-np.exp(params)[None,:]*t[:,None])\\ndef fit_exp(L,T):\\n C=ls(L,T); P=np.linalg.qr(L,mode='reduced')[1]@C\\n def res(v):\\n  E=expo(v,t); return (ls(E,P.T).T@E.T-P).ravel()\\n r=least_squares(res,np.log([.4,1.8]),bounds=(np.log(.03),np.log(15)),max_nfev=100); E=expo(r.x,t)\\n return ls(E,C.T).T,E,np.exp(r.x)\\nprint('scalar paired',ls(XX['pair'],y),'shared', ls(XX['shared'],y)); print('trajectory modes',fit_exp(L,T));\\nrng=np.random.default_rng(988); splits=[('56/16',np.arange(56,72))]; splits.extend((f'block{i}',np.arange(i,i+12)) for i in range(0,72,12)); splits.extend((f'max{i}',np.argsort(z[:,i])[-12:]) for i in range(4)); splits.extend((f'min{i}',np.argsort(z[:,i])[:12]) for i in range(4)); splits.extend((f'random{i}',ix) for i,ix in enumerate(np.array_split(rng.permutation(len(z)),6)))\\nmetrics={k:[] for k in [*XX,'affine','rank2','exp2']};\\nfor name,j in splits:\\n i=np.setdiff1d(np.arange(len(z)),j)\\n for k,X in XX.items():\\n  offset=.18*(p+q) if k=='fixed18' else np.zeros(len(z)); pred=X[j]@ls(X[i],(y-offset)[i])+offset[j]; metrics[k].append(np.mean(abs(y[j]-pred)))\\n C=ls(L[i],T[i]); _,_,V=np.linalg.svd(L[i]@C,full_matrices=False); V=V[:2]; W,E,_=fit_exp(L[i],T[i]);\\n for k,pred in zip(('affine','rank2','exp2'),(L[j]@C,L[j]@C@V.T@V,L[j]@W@E.T)):\\n  metrics[k].append(np.mean(abs(pred-T[j]),axis=0));\\nfor k,m in metrics.items():\\n m=np.array(m); groups=[slice(0,1),slice(1,7),slice(7,15),slice(15,None)]; print(k,'first / blocks / extremal / random avg,worst',[(round(m[g].mean(),6),round(m[g].max(),6)) for g in groups],'worst slice',splits[np.unravel_index(m.argmax(),m.shape)[0]][0]);\\nPY\\npython3 /tmp/cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted quadratic and affine trajectory -> H2 two calibrated cross-products and two shared relaxation modes; current 56/16 MAE is 0.0043 for the scalar and at most 0.0046 across trajectory horizons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use panel C to explain scalar curvature\",\n      \"rejected_reason\": \"An inverse-A then forward-B transform already concentrates the curvature in two cross-products; panel C has not shown a needed contribution.\"\n    }\n  ],\n  \"rationale\": \"Compare the candidate constraints with their unrestricted baselines on the original split, contiguous blocks, and coordinate extremes. Keep a constraint only if it improves or preserves prediction on the slices where extrapolation matters.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c5ff9fe267061117b41747b641b272c8e582fdded5bc5095c620f4e0c8a77978",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31846.14,
+      "usage_known": true,
+      "prompt_tokens": 28674,
+      "cached_tokens": 10880,
+      "completion_tokens": 1158
+    }
+  ]
+}

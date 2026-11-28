@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5453e06a38a74f9199e0c4751f73c75e",
+  "call_seq": 11,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c01_batch_05__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:27:17.408423+00:00",
+  "ended_at_utc": "2026-11-28T08:27:41.712885+00:00",
+  "request_sha256": "944f79364a8af168c683c8f5aa7867db391b04a1a3a4fe2423aaad03eddf4319",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60615,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33195,
+    "cached_tokens": 9344,
+    "completion_tokens": 926
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\np='/tmp/structured05.py'; s=open(p).read().replace('for j in ids:', 'for j in ids[:0]:').replace(\\\"print('operator',quad,p,'LOO MAE',np.abs(errs).mean(0),flush=True)\\\",\\\"print('operator',quad,p,flush=True)\\\")\\npos=s.index('results={}'); s=s[:pos]+'''folds += [np.argsort(np.linalg.norm(x,axis=1)),np.argsort(np.min(np.linalg.norm(x[:,None]-x[None,:]+100*np.eye(len(x))[:,:,None],axis=2),axis=1))]\\nresults={}\\nfor ids in folds:\\n i,j=ids[:56],ids[56:]; Q=temporal(t,z[i]); K=blocks(s,x[ids],56,'panel')[0]; S=blocks(s,x[ids],56,'smooth')[0]\\n extra=[base(h[ids],56) for h in coords]\\n targets=[predict(k,y[i])[0][:,0] for k in (K,np.concatenate((K,*extra)),np.concatenate((K,extra[1],extra[3])),S)]\\n traj=[predict(k,z[i]@Q)[0]@Q.T for k in (S,np.concatenate((S,extra[1])),np.concatenate((S,*extra)))]\\n independent=np.column_stack([predict(np.concatenate((S,extra[1])),(z[i]@Q)[:,h])[0][:,0] for h in range(Q.shape[1])])@Q.T\\n targets += [.25*targets[0]+.75*targets[1], .2*targets[3]+.8*targets[1]]\\n traj += [independent, .5*(traj[1]+traj[2])]\\n ey=[np.abs(p-y[j]).mean() for p in targets]; ez=[(np.abs(p-z[j]).mean(),np.abs(p[:,-1]-z[j,-1]).mean()) for p in traj]\\n results.setdefault('target',[]).append(ey);results.setdefault('traj',[]).append(ez)\\nfor k,v in results.items():\\n r=np.array(v); print(k,'first',np.round(r[0],6),'mean',np.round(r[:-2].mean(0),6),'worst',np.round(r[:-2].max(0),6),'support-edge',np.round(r[-2:],6),sep='\\\\\\\\n')\\n''';open('/tmp/stress05.py','w').write(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/stress05.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine Panel C proxies → H2 nonlinear Panel C kernel features; across 11 splits the challenger reduces worst target MAE from 0.06451 to 0.05817 and worst trajectory MAE from 0.01145 to 0.01070.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the full challenger without comparing trajectory branches\",\"rejected_reason\":\"The C2-only branch has lower mean terminal error; compare it against the full challenger on inputs at the edge of training support before selecting the trajectory model.\"}],\"rationale\":\"Compare the improving challenger and simple blends for degradation on high-norm and sparsely sampled inputs. Those slices test whether the fitted panel harmonics generalize beyond the dense part of the training set.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "882ceb9c7c0540325e22d0dd7603f23faa21b9e6501cf24ecb63622543d46c41",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26844.33,
+      "usage_known": true,
+      "prompt_tokens": 33195,
+      "cached_tokens": 9344,
+      "completion_tokens": 926
+    }
+  ]
+}

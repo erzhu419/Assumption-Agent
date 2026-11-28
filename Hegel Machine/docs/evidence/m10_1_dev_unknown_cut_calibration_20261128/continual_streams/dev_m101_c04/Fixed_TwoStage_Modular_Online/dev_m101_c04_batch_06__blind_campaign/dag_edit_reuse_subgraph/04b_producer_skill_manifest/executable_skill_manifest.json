@@ -1,0 +1,206 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_m101_c04_batch_06_2cd9ffd81ea1",
+    "source_hash": "2cd9ffd81ea15ad8394a544a57c6ab960eb8154debed52c2bfa558251d17ef2a",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "dev_m101_c04_batch_06__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/cal_probe.py",
+        "archived_relpath": "producers/tmp__cal_probe.py",
+        "bytes": 1395,
+        "sha256": "45a137b3a2de474e0ab41fbfb064c7e000f448288f6405df274afb29bdee4c39"
+      },
+      {
+        "container_path": "/tmp/calibration_baseline.py",
+        "archived_relpath": "producers/tmp__calibration_baseline.py",
+        "bytes": 1535,
+        "sha256": "09db4dcc708cec6bdbed54d15deff9298f4c0509995d0dc1070b0c6cef393163"
+      },
+      {
+        "container_path": "/tmp/coordinate_probe.py",
+        "archived_relpath": "producers/tmp__coordinate_probe.py",
+        "bytes": 1743,
+        "sha256": "5f6ea29f7a84d1fdacf083a639219a44721caceb8b9e4f2b4b936f95887af77a"
+      },
+      {
+        "container_path": "/tmp/handoff.py",
+        "archived_relpath": "producers/tmp__handoff.py",
+        "bytes": 2600,
+        "sha256": "555008e7a160153c02f27f4b9b5edec8aeadca0c01750e9123003fd395e11727"
+      },
+      {
+        "container_path": "/tmp/latent.py",
+        "archived_relpath": "producers/tmp__latent.py",
+        "bytes": 2513,
+        "sha256": "b95e56167d5ccf0bf85625f6b1784f7bfd06328189f0593333969fe159c2e9bb"
+      },
+      {
+        "container_path": "/tmp/lift.py",
+        "archived_relpath": "producers/tmp__lift.py",
+        "bytes": 2989,
+        "sha256": "b3d0ad595f48f5a22a694ba4549b82e5a407d3a67ac5bb8f0de143338b60ec91"
+      },
+      {
+        "container_path": "/tmp/panel_c_probe.py",
+        "archived_relpath": "producers/tmp__panel_c_probe.py",
+        "bytes": 2332,
+        "sha256": "65a0aca7c44a7edabd7334e04d70f3ad77c7599c43dbaa1675d4748e05516687"
+      },
+      {
+        "container_path": "/tmp/rescue.py",
+        "archived_relpath": "producers/tmp__rescue.py",
+        "bytes": 3466,
+        "sha256": "9418f0a39315db1c532fc94ad1d3f8846062e275a587aa1d95593fa104f1e969"
+      },
+      {
+        "container_path": "/tmp/search_handoff.py",
+        "archived_relpath": "producers/tmp__search_handoff.py",
+        "bytes": 2797,
+        "sha256": "bbf77cf5ee9600d8d8d765e8d48454561360d9616335889eb4cc095354a7ec6b"
+      },
+      {
+        "container_path": "/tmp/stress_lift.py",
+        "archived_relpath": "producers/tmp__stress_lift.py",
+        "bytes": 683,
+        "sha256": "5ee04b4ace528a124b7d6caf1161914cac6f50328d81ec9c8cfa7c0875eeaa3e"
+      },
+      {
+        "container_path": "/tmp/structure.py",
+        "archived_relpath": "producers/tmp__structure.py",
+        "bytes": 2859,
+        "sha256": "dee04bd158a81d9b781adc08dae896a87e5740c932a34d20d92aaf4340894c9b"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m101_c04_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m101_c04_batch_00_solver.py",
+        "bytes": 2379,
+        "sha256": "8e5e066db2e5ed651242064b84055b93b6496b62ca82bfb40735981939dd8e89"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json _frozen_nodes/node_01.py test_dag_candidate.py validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nb=pickle.load(open('public_batch.pkl','rb'))\ndef show(x,p=''):\n if isinstance(x,dict):\n  for k,v in x.items(): show(v,p+'/'+str(k))\n elif isinstance(x,np.ndarray):\n  print(p,x.shape,x.dtype,repr(x[:3] if x.ndim else x))\n else: print(p,type(x),repr(x)[:250])\nshow(b)\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust IRLS Cauchy forward calibration'",
+      "cd /holdout_task; tail -77 test_dag_candidate.py; ls -a /pretrain_task; python3 - <<'PY'\nimport pickle,numpy as np,itertools\nb=pickle.load(open('public_batch.pkl','rb')); print('public batches',len(b)); s=b[0]['study']\ndef show(d,p=''):\n for k,v in d.items():\n  if isinstance(v,dict):show(v,p+k+'/')\n  else:\n   v=np.asarray(v);print(p+k,v.shape,v.dtype,v.flat[:5])\nshow(s)\nfor k in ('panel_a','panel_b','panel_c'):\n p=s[k];print(k,[(h,np.asarray(a).shape) for h,a in p.items()]);a=list(p.values());\n if len(a)!=2 or any(np.asarray(t).ndim!=2 for t in a):continue\n x,y=map(np.asarray,a);A=np.column_st",
+      "PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -c 1200; echo; cat > /tmp/cal_probe.py <<'PY'\nimport pickle,numpy as np,itertools\nfrom scipy.linalg import qr\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nu,v=(s['panel_a'][k] for k in ('u','v'))\nls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\na=np.c_[np.ones(len(u)),u]\n# The gross errors are row-wise; select the consensus, then compare clean residuals.\nm=np.ones(len(u),bool)\nfor _ in range(6):\n r=np.linalg.norm(a@ls(a[m],v[m])-v,axis",
+      "cat > /tmp/coordinate_probe.py <<'PY'\nimport pickle, numpy as np\nfrom scipy.optimize import least_squares\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nfrozen={}; exec(open('/holdout_task/_frozen_nodes/node_01.py').read(),frozen)\ndef affine(x):return np.c_[np.ones(len(x)),x]\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\nu,v=(s['panel_a'][k] for k in ('u','v'))\na=affine(u); m=np.ones(len(u),bool)\nfor _ in range(6):\n r=np.linalg.norm(a@ls(a[m],v[m])-v,axis=1);m=np.argsort(r)[:len(u)-3]\ncoef=[]\nfor j in range(4):\n k=(j+1)%4; D=np.c_[np.ones(len(u)),u[:,j],u[:,k],u",
+      "cat /holdout_task/public_asset_index.json; sed '/^for name,F in trans.items()/,$d' /tmp/coordinate_probe.py > /tmp/handoff.py; cat >> /tmp/handoff.py <<'PY'\nfrom itertools import combinations_with_replacement\np=s['panel_c']; u=p['u']; v1=p['v1']; v2=p['v2']\ndef design(x, terms):\n return np.column_stack([np.ones(len(x))]+[np.prod(x[:,t],axis=1) for t in terms])\nlin=[(i,) for i in range(4)];quad=list(combinations_with_replacement(range(4),2)); diag=[(i,i,i) for i in range(4)]; cyc=[(i,(i+1)%4) for i in range(4)]\nfor name,F in trans.items():\n for xx,yy in ((F(u),v1),(F(u),v2),(F(v1),u),(F(v2),u),",
+      "cat /holdout_task/_frozen_nodes/node_01.py; sed '/^for name,F in trans.items()/,$d' /tmp/coordinate_probe.py > /tmp/panel_c_probe.py; cat >> /tmp/panel_c_probe.py <<'PY'\nfrom scipy.optimize import minimize_scalar\np=s['panel_c']; u=p['u']; C={}\nfor key,fun in [('v1',np.tanh),('v2',np.cos)]:\n def basis(z,a): return np.c_[affine(z),fun(a*z)]\n def obj(a):\n  D=basis(u,a); e=p[key]-D@ls(D,p[key]); return np.sum(e*e)\n a=minimize_scalar(obj,bounds=(.6,3.5),method='bounded').x\n w=ls(basis(u,a),p[key]); print(key,'frequency/RMS',a,(obj(a)/96)**.5,'coef',w.round(4)); C[key]=(lambda z,a=a,w=w,basis=basis,",
+      "cat /holdout_task/test_dag_candidate.py | tail -53; sed '/^vals=\\[\\]/,$d' /tmp/panel_c_probe.py > /tmp/latent.py; cat >> /tmp/latent.py <<'PY'\nprint('study keys',list(s),'train',list(s['train'])); print('telemetry',s.get('telemetry_vec'));print('traj shape',t.shape,'singular',np.linalg.svd(t-t.mean(axis=0),compute_uv=False)); print('Ai(x) inversion error',np.max(np.abs(A(Ai(x))-x)))\nfor name,F in trans.items():\n z=F(x); f1=C['v1'](z);f2=C['v2'](z)\n for lab,D in [('linear',affine(z)),('plus both',np.c_[affine(z),f1,f2]),('C only',affine(np.c_[f1,f2])),('tanh/cos',np.c_[affine(z),np.tanh(2.35*z)",
+      "sed '/^vals=\\[\\]/,$d' /tmp/panel_c_probe.py > /tmp/search_handoff.py; cat >> /tmp/search_handoff.py <<'PY'\nfrom itertools import product\n\ndef inverse(F,z,guess):\n return np.array([least_squares(lambda v:F(v[None])[0]-r,g,max_nfev=80).x for r,g in zip(z,guess)])\nfor key in ('v1','v2'):\n f=C[key]; lin=ls(affine(p['u']),p[key]); C[key+'i']=lambda z,f=f,lin=lin:inverse(f,z,np.clip(np.linalg.solve(lin[1:].T,(z-lin[0]).T).T,-2,2))\nF={**trans,**C}; tr=np.arange(52);te=np.arange(52,len(x)); scored=[]\ndef score(n,z):\n D=affine(z); e=D[te]@ls(D[tr],t[tr])-t[te]; err=np.mean(abs(e));scored.append((err,n,",
+      "cat > /holdout_task/node_00.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _affine(x):\n    return np.column_stack((np.ones(len(x)), x))\n\n\ndef _calibrate(panel):\n    u, v = panel['u'], panel['v']\n    n = np.roll(u, -1, axis=1)\n    designs = np.stack((np.ones_like(u), u, n, u*n, u**3), axis=-1)\n    weights = np.ones(len(u))\n    for _ in range(10):\n        w = np.sqrt(weights)\n        coef = np.array([np.linalg.lstsq(designs[:, j]*w[:, None], v[:, j]*w, rcond=None)[0] for j in range(u.shape[1])])\n        r = np.linalg.norm(np.einsum('nck,ck->nc', designs, coef)-v, axi",
+      "OPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py | grep -A3 -E '^(Ai|BiAi|AiAi) range|trajectory directions|latent correlations'; sed '/^print(\\x27study keys/,$d' /tmp/latent.py > /tmp/rescue.py; cat >> /tmp/rescue.py <<'PY'\nfrom itertools import combinations, combinations_with_replacement\nfrom scipy.optimize import minimize_scalar\nz=Ai(x); q=Bi(z); Y=np.c_[t,y]; tr=np.arange(52); te=np.arange(52,72)\nresults=[]\ndef check(name,D):\n D=affine(D); w=ls(D[tr],Y[tr]); E=D@w-Y\n results.append((np.mean(abs(E[te,:-1])),np.mean(abs(E[tr,:-1])),np.mean(abs(E[te,-1])),name));return w\nfor name,g in [('Ai',",
+      "cat > /tmp/lift.py <<'PY'\n\n\ndef _quadratic(z):\n    i, j = np.triu_indices(z.shape[1])\n    return np.c_[_affine(z), z[:, i] * z[:, j]]\n\n\ndef _scalar_coordinate(d, e, y):\n    # Identify the scalar index and its response curve using only training rows.\n    base = np.linalg.lstsq(d, y, rcond=None)[0]\n    best = None\n    def fit(kind, init, size, test_kind):\n        nonlocal best\n        span = d[:, :size]\n        ev = e[:, :size]\n        def evaluate(p, D, S, jac=False):\n            if kind == 'index':\n                q = D @ p[:-2]\n                k = np.exp(p[-1])\n                h = np.tanh(k*q"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__rescue.py",
+      "primary_producer_container_path": "/tmp/rescue.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_00.py",
+        "filename": "node_00.py",
+        "bytes": 4072,
+        "sha256": "ec6d91636cce9ef003696945907b42e31b352f94ba680be668b234dbf821ba0b",
+        "content_addressed_ref": "content_addressed_blobs/ec6d91636cce9ef003696945907b42e31b352f94ba680be668b234dbf821ba0b.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_00.py"
+    ],
+    "exported_pure_functions": [
+      "_affine",
+      "_calibrate",
+      "_inverse",
+      "run_node",
+      "ls",
+      "design",
+      "_quadratic",
+      "_scalar_coordinate"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "2cd9ffd81ea15ad8394a544a57c6ab960eb8154debed52c2bfa558251d17ef2a",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cat > /tmp/lift.py <<'PY'\n\n\ndef _quadratic(z):\n    i, j = np.triu_indices(z.shape[1])\n    return np.c_[_affine(z), z[:, i] * z[:, j]]\n\n\ndef _scalar_coordinate(d, e, y):\n    # Identify the scalar index and its response curve using only train",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "2cd9ffd81ea15ad8394a544a57c6ab960eb8154debed52c2bfa558251d17ef2a",
+        "expected_candidate_sha256": "2cd9ffd81ea15ad8394a544a57c6ab960eb8154debed52c2bfa558251d17ef2a",
+        "computed_candidate_sha256": "2cd9ffd81ea15ad8394a544a57c6ab960eb8154debed52c2bfa558251d17ef2a",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_00.py",
+            "bytes": 4072
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_2cd9ffd8"
+    }
+  },
+  "structure": {
+    "full_producer_count": 12,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_affine",
+        "code": "def _affine(x):\n    return np.column_stack((np.ones(len(x)), x))"
+      },
+      {
+        "name": "_calibrate",
+        "code": "def _calibrate(panel):\n    (u, v) = (panel['u'], panel['v'])\n    n = np.roll(u, -1, axis=1)\n    designs = np.stack((np.ones_like(u), u, n, u * n, u ** 3), axis=-1)\n    weights = np.ones(len(u))\n    for _ in range(10):\n        w = np.sqrt(weights)\n        coef = np.array([np.linalg.lstsq(designs[:, j] * w[:, None], v[:, j] * w, rcond=None)[0] for j in range(u.shape[1])])\n        r = np.linalg.norm(np.einsum('nck,ck->nc', designs, coef) - v, axis=1)\n        scale = max(np.median(r), 1e-08)\n        weights = 1 / (1 + (r / (2 * scale)) ** 2)\n    keep = np.argsort(r)[:-3]\n    return np.array([np.linalg.lstsq(designs[keep, j], v[keep, j], rcond=None)[0] for j in range(u.shape[1])]).T"
+      },
+      {
+        "name": "_inverse",
+        "code": "def _inverse(x, c):\n    from scipy.optimize import least_squares\n    (bias, linear, cross, product, cubic) = c\n\n    def forward(z):\n        n = np.roll(z, -1)\n        return bias + linear * z + cross * n + product * z * n + cubic * z ** 3\n    return np.array([least_squares(lambda z: forward(z) - row, (row - bias) / linear, gtol=1e-11).x for row in x])"
+      },
+      {
+        "name": "run_node",
+        "code": "def run_node(inputs: dict) -> dict:\n    s = inputs['__input__']\n    c = _calibrate(s['panel_a'])\n    b = s['panel_b']\n    (offset, *linear) = np.linalg.lstsq(_affine(b['u']), b['v'], rcond=None)[0]\n    linear = np.asarray(linear)\n\n    def coords(x):\n        return np.linalg.solve(linear.T, (_inverse(x, c) - offset).T).T\n    train = s['train']\n    return {'z_tr': coords(train['x']), 'z_te': coords(s['test']['x']), 'y': train['y'], 'traj': train['traj']}"
+      },
+      {
+        "name": "ls",
+        "code": "def ls(a, b):\n    return np.linalg.lstsq(a, b, rcond=None)[0]"
+      },
+      {
+        "name": "design",
+        "code": "def design(x, terms):\n    return np.column_stack([np.ones(len(x))] + [np.prod(x[:, t], axis=1) for t in terms])"
+      },
+      {
+        "name": "_quadratic",
+        "code": "def _quadratic(z):\n    (i, j) = np.triu_indices(z.shape[1])\n    return np.c_[_affine(z), z[:, i] * z[:, j]]"
+      },
+      {
+        "name": "_scalar_coordinate",
+        "code": "def _scalar_coordinate(d, e, y):\n    from scipy.optimize import least_squares\n    base = np.linalg.lstsq(d, y, rcond=None)[0]\n    best = None\n\n    def fit(kind, init, size, test_kind):\n        nonlocal best\n        span = d[:, :size]\n        ev = e[:, :size]\n\n        def evaluate(p, D, S, jac=False):\n            if kind == 'index':\n                q = D @ p[:-2]\n                k = np.exp(p[-1])\n                h = np.tanh(k * q)\n                if jac:\n                    g = p[-2] * (1 - h * h) * k\n                    return np.c_[D * (1 + g[:, None]), h, g * q]\n                return q + p[-2] * h\n            q = S @ p[d.shape[1]:-1]\n            if kind == 'sin':\n                (h, g) = (np.sin(q), np.cos(q))\n            else:\n                h = np.tanh(q)\n                g = 1 - h * h\n            if jac:\n                return np.c_[D, S * (p[-1] * g[:, None]), h]\n            return D @ p[:d.shape[1]] + p[-1] * h\n        (lo, hi) = (np.full(len(init), -20.0), np.full(len(init), 20.0))\n        if kind == 'index':\n            (lo[-1], hi[-1]) = (-3, 2.8)\n        opt = least_squares(lambda p: evaluate(p, d, span) - y, np.clip(init, lo + 1e-05, hi - 1e-05), jac=lambda p: evaluate(p, d, span, True), bounds=(lo, hi), max_nfev=120, ftol=1e-08)\n        err = np.mean(opt.fun ** 2)\n        quality = err * (1 + 2 * len(init) / (len(y) - len(init)))\n        if best is None or quality < best[0]:\n            p = opt.x\n            if kind == 'index' and test_kind == 'latent':\n                (z0, z1) = (d @ p[:-2], e @ p[:-2])\n            else:\n                (z0, z1) = (evaluate(p, d, span), evaluate(p, e, ev))\n            best = (quality, z0, z1, kind, err)\n    for a in (0.2, 0.6, -0.25):\n        for k in (0.6, 1.7, 3.0):\n            fit('index', np.r_[base / (1 + a * 0.45), a, np.log(k)], d.shape[1], 'latent')\n    if best[-1] > 0.00014:\n        for size in (5, d.shape[1]):\n            for kind in ('tanh', 'sin'):\n                for scale in (0.6, 1.7):\n                    fit(kind, np.r_[base * 0.8, scale * base[:size], 0.5], size, 'prediction')\n    return best[1:3]"
+      }
+    ]
+  }
+}

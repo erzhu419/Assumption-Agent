@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3e5333b0785e45acb2072fbb19f90ebf",
+  "call_seq": 4,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Fixed_TwoStage_Modular_Online__dev_m101_c01_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:59:39.022714+00:00",
+  "ended_at_utc": "2026-11-28T08:00:16.769785+00:00",
+  "request_sha256": "3ed560b3aae3c9f53896a085021c9c2ca56cd7d24ce82de7c63127b80c722686",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33384,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24164,
+    "cached_tokens": 9344,
+    "completion_tokens": 1447
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/basis_scan.py <<'PY'\\nimport pickle,itertools as it,numpy as np\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; d=s['train']; x=d['x']; z=d['traj']; U,S,V=np.linalg.svd(z,full_matrices=False); Y=np.c_[d['y'],U[:,:2]*S[:2]]; n=len(x); np.set_printoptions(precision=4,suppress=True)\\ndef a(x):return np.c_[np.ones(len(x)),x]\\np=s['panel_a']; mask=np.ones(len(p['u']),bool)\\nfor _ in range(4):\\n A=np.linalg.lstsq(a(p['u'])[mask],p['v'][mask],rcond=None)[0];r=np.linalg.norm(a(p['u'])@A-p['v'],axis=1); mask=r<4*np.median(r)\\np=s['panel_b']; B=np.linalg.lstsq(a(p['u']),p['v'],rcond=None)[0];print('B orthogonality',B[1:]@B[1:].T)\\nxa=(x-A[0])/np.diag(A[1:]); xb=a(x)@B; xab=a(xa)@B; xbi=(x-B[0])@np.linalg.inv(B[1:]); xabi=(xa-B[0])@np.linalg.inv(B[1:]); xba=(xb-A[0])/np.diag(A[1:]); bases={'raw':x,'Ainv':xa,'B':xb,'AinvB':xab,'Binv':xbi,'AinvBinv':xabi,'BAinv':xba}\\nfolds=[(np.arange(56),np.arange(56,72))]; rng=np.random.default_rng(22); perm=rng.permutation(n); folds += [(np.setdiff1d(np.arange(n),j), j) for j in np.array_split(perm,5)]\\ndef score(K,lam):\\n return np.array([np.mean(abs(K[np.ix_(j,i)]@solve(K[np.ix_(i,i)]+lam*np.eye(len(i)),Y[i],assume_a='pos')-Y[j]),0) for i,j in folds])\\nfor name,q in bases.items():\\n q=q/np.std(q,axis=0); P=np.c_[a(q),*[q[:,i]*q[:,j] for i,j in it.combinations_with_replacement(range(4),2)]]; K=P@P.T; dd=cdist(q,q,'sqeuclidean'); results=[]\\n def add(label,E):\\n  for l in [1e-5,1e-4,1e-3,.01]:\\n   r=score(K+E,l);results.append((label,l,r[0],r[1:].mean(0),r[1:].max(0)))\\n for h in (1.,1.7,2.6,4.):\\n  add(('rbf',h),np.exp(-dd/(2*h*h)))\\n  for f in (.7,1.2,1.7,2.3):\\n   G=np.c_[np.sin(q*f),np.cos(q*f),np.tanh(q*f)];add(('additive',f,h),G@G.T+.05*np.exp(-dd/(2*h*h)))\\n for degree in (3,4):\\n  G=np.column_stack([np.prod(q[:,ix],axis=1) for ix in it.combinations_with_replacement(range(4),degree)]);add(('poly',degree),.1*G@G.T)\\n print(name,'best by output (scalar / amplitude combined):');\\n for k in (0,1):\\n  for row in sorted(results,key=lambda r:r[3][0] if k==0 else np.mean(r[3][1:]))[:2]:print(row)\\n# Inspect which rotation makes quadratic curvature compact.\\nfor name in ('raw','AinvB','AinvBinv'):\\n q=bases[name]; pairs=list(it.combinations_with_replacement(range(4),2)); P=np.c_[a(q),*[q[:,i]*q[:,j] for i,j in pairs]]; C=np.linalg.lstsq(P,Y,rcond=None)[0];print(name,'linear',C[:5].T,'quad',C[5:].T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/basis_scan.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (raw-coordinate smooth fit) -> H2 (calibrated operator coordinates with compact nonlinear terms); archival 56/16 MAE is 0.041965 for y and 0.009713 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use panel C in the predictor immediately\",\n      \"rejected_reason\": \"Its nonlinear response is established, but its contribution to the target is not; first test whether the accurately estimated A and B operators already explain the nonlinearity.\"\n    }\n  ],\n  \"rationale\": \"Compare raw, calibrated, and forward/inverse B coordinates on the ordered holdout and five additional folds. Better generalization with simpler terms in one frame would identify which operator composition to investigate; otherwise retain raw coordinates and test a richer grammar.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "9a05d1df6a397cf5b5ed0d50c74a2821b68bae4dedc3f892a1abd328454a61d7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40155.06,
+      "usage_known": true,
+      "prompt_tokens": 24164,
+      "cached_tokens": 9344,
+      "completion_tokens": 1447
+    }
+  ]
+}

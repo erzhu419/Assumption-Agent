@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b306318d1da64c709a2a654e95be08f3",
+  "call_seq": 1,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Fixed_TwoStage_Modular_Online__init_decomp_dev_m101_c04_batch_01",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:58:02.106801+00:00",
+  "ended_at_utc": "2026-11-28T07:58:34.081702+00:00",
+  "request_sha256": "c4c274223624cead0bca9ce1f9530e26b923c7c0155a11082a13613a32a1fd9f",
+  "system_prompt_chars": 2229,
+  "stdin_payload_chars": 4917,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 13090,
+    "cached_tokens": 0,
+    "completion_tokens": 1234
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"The source solver composes two distinct stages: it fits and inverts panel_a calibration and applies panel_b mixing to produce shared coordinates, then uses those coordinates for the scalar and trajectory readouts. The split preserves both stages without changing the numerical operations or introducing panel_c, which the source never uses. The public summaries show stable affine fits for panels A and B and a large channel-3 telemetry shift, but do not establish which stage caused the target failure.\",\n  \"nodes\": [\"node_00\", \"node_01\"],\n  \"edges\": [[\"__input__\", \"node_00\"], [\"node_00\", \"node_01\"]],\n  \"sink_node_id\": \"node_01\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibration(study):\\n    a = study['panel_a']\\n    u, v = a['u'], a['v']\\n    i, j = np.triu_indices(len(u), 1)\\n    coeff = []\\n    for x, y in zip(u.T, v.T):\\n        dx = x[i] - x[j]\\n        good = dx != 0\\n        gain = np.median((y[i] - y[j])[good] / dx[good])\\n        offset = np.median(y - gain * x)\\n        err = np.abs(y - offset - gain * x)\\n        keep = err <= max(0.001, 5 * np.median(err))\\n        coeff.append(_ls(_affine(x[keep]), y[keep]))\\n    offset, gain = np.asarray(coeff).T\\n    b = study['panel_b']\\n    mixing = _ls(_affine(b['u']), b['v'])\\n    return offset, gain, mixing\\n\\n\\ndef _coordinates(x, calibration):\\n    offset, gain, mixing = calibration\\n    return _affine((x - offset) / gain) @ mixing\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    calibration = _calibration(study)\\n    train = study['train']\\n    z_tr = _coordinates(train['x'], calibration)\\n    z_te = _coordinates(study['test']['x'], calibration)\\n    return {'z_tr': z_tr, 'z_te': z_te, 'y': train['y'],\\n            'traj': train['traj'], 'eval_times': study['eval_times']}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _cross(z):\\n    return z[:, 0] * z[:, 2] + z[:, 1] * z[:, 3]\\n\\n\\ndef _relaxation(design, trajectories, times):\\n    q, r = np.linalg.qr(design, mode='reduced')\\n    projected = q.T @ trajectories\\n\\n    def basis(log_rates):\\n        return -np.expm1(-times[:, None] * np.exp(log_rates))\\n\\n    def residual(log_rates):\\n        b = basis(log_rates)\\n        return (b @ _ls(b, projected.T) - projected.T).ravel()\\n\\n    result = least_squares(residual, np.log([0.4, 1.8]),\\n                           bounds=(np.log(0.03), np.log(15.0)))\\n    b = basis(result.x)\\n    weights = _ls(r, _ls(b, projected.T).T)\\n    return weights @ b.T\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    features = inputs['node_00']\\n    z, z_test = features['z_tr'], features['z_te']\\n    design, test_design = _affine(z), _affine(z_test)\\n    w = _ls(np.column_stack((z, _cross(z))), features['y'])\\n    y_hat = np.column_stack((z_test, _cross(z_test))) @ w\\n    state_pred = test_design @ _relaxation(design, features['traj'], features['eval_times'])\\n    final_state = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(),\\n                                         final_state.mean(), final_state.std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "ab43ff560b63262b46b4cb506074e2a7e9e022ae5bf8d64fdfe400b33161af6c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34423.05,
+      "usage_known": true,
+      "prompt_tokens": 13090,
+      "cached_tokens": 0,
+      "completion_tokens": 1234
+    }
+  ]
+}

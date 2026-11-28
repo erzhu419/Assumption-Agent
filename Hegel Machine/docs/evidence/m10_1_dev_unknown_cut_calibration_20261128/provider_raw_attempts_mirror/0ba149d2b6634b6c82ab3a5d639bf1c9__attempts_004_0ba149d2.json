@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0ba149d2b6634b6c82ab3a5d639bf1c9",
+  "call_seq": 4,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:59:18.354092+00:00",
+  "ended_at_utc": "2026-11-28T08:00:03.825176+00:00",
+  "request_sha256": "2ad2a467f35c8f35d06f9bb6aef466abeb9275fe3cd83e76efdc733a5bbd2108",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 28439,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22178,
+    "cached_tokens": 5504,
+    "completion_tokens": 1924
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/operators.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nS=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\ndef affine(u):return np.c_[np.ones(len(u)),u]\\ndef operators(s):\\n p=s['panel_a']; u=p['u']; v=p['v']; f=affine(u); keep=np.linalg.norm(v-f@ls(f,v),axis=1)<2\\n a=ls(f[keep],v[keep]); a[1:]=np.diag(np.diag(a[1:])); a[0]=(v[keep]-u[keep]@a[1:]).mean(0)\\n p=s['panel_b']; b=ls(affine(p['u']),p['v']); return a,b\\ndef coords(x,s):\\n a,b=operators(s); A=lambda x:affine(x)@a; B=lambda x:affine(x)@b; I=lambda x:(x-a[0])/np.diag(a[1:]); J=lambda x:(x-b[0])@np.linalg.inv(b[1:]); return {'raw':x,'A':A(x),'Ai':I(x),'B':B(x),'BA':B(A(x)),'BAi':B(I(x)),'AB':A(B(x)),'AiB':I(B(x)),'Bi':J(x),'BiA':J(A(x)),'BiAi':J(I(x))}\\ndef basis(t,q):return np.column_stack((-np.expm1(-q[0]*t),np.exp(-q[2]*t)*np.sin(q[1]*t)))\\ndef modes(t,z):\\n def res(q):\\n  f=basis(t,q);return (f@ls(f,z.T)-z.T).ravel()\\n q=least_squares(res,[.55,1.13,.18],bounds=([.02,.5,-.3],[3,2,1])).x; return basis(t,q)\\ndef powers(x,n):return np.column_stack([np.prod(x[:,p],axis=1) for p in combinations_with_replacement(range(x.shape[1]),n)])\\nif __name__=='__main__':\\n np.set_printoptions(precision=4,suppress=True,linewidth=150)\\n c=S['panel_c']; u=c['u']; x=S['train']['x']; y=S['train']['y']; z=S['train']['traj']; t=S['eval_times']; mo=modes(t,z); Y=np.c_[y,ls(mo,z.T).T]; print('mode coefficients std',Y.std(0)); print('raw linear coeff',ls(affine(x),Y)); print('quadratic coeff',ls(np.c_[affine(x),powers(x,2)],Y)); print('panel B svd',np.linalg.svd(operators(S)[1][1:],compute_uv=False))\\n def cv(f,v):\\n  q=np.linalg.svd(f,full_matrices=False)[0]; h=(q*q).sum(1); return np.sqrt(np.mean(((v-f@ls(f,v))/(1-h[:,None]))**2,axis=0))\\n for key in ['v1','v2']:\\n  v=c[key]\\n  for name,w in {'raw':u,'BA':coords(u,S)['BA'],'centered_affine':affine(u)@ls(affine(u),v),'centered_B':coords(u,S)['B']}.items():\\n   f=affine(u); options={};\\n   for family in ['sin','cos','tanh','quad','cube']:\\n    freq=np.linspace(.5,5,91) if family in ('sin','cos','tanh') else [1.]\\n    vals=np.array([cv(np.c_[f, {'sin':np.sin,'cos':np.cos,'tanh':np.tanh,'quad':np.square,'cube':lambda x:x**3}[family](a*w)],v) for a in freq]); i=np.argmin(np.mean(vals,axis=1)); options[family]=(round(freq[i],3),np.round(vals[i],5))\\n   print(key,name,options)\\n  if key=='v2':print('v2 diag-quadratic coeff',ls(np.c_[affine(u),u*u],v))\\n print('56/16 and six 56/16 splits; selected simple readout candidates')\\n rng=np.random.default_rng(451); splits=[(np.arange(56),np.arange(56,72))]+[(p[:56],p[56:]) for p in [rng.permutation(72) for _ in range(6)]]\\n results=[]\\n for k,w in coords(x,S).items():\\n  for name,g in [('lin',affine(w)),('p2',np.c_[affine(w),powers(w,2)]),('d3',np.c_[affine(w),powers(w,2),w**3]),('d34',np.c_[affine(w),powers(w,2),w**3,w**4]),('cube',np.c_[affine(w),w**2,w**3]),('p3',np.c_[affine(w),powers(w,2),powers(w,3)]),*((f'{f}{a}',np.c_[affine(w),powers(w,2),h(a*w)]) for f,h in [('sin',np.sin),('th',np.tanh)] for a in [.8,1.3,1.8,2.3,3.])]:\\n   er=[]\\n   for tr,te in splits:\\n    m=modes(t,z[tr]); a=ls(m,z[tr].T).T; pr=g[te]@ls(g[tr],np.c_[y[tr],a]); er.append([np.mean(abs(pr[:,0]-y[te])),np.mean(abs(pr[:,1:]@m.T-z[te]))]);\\n   er=np.array(er); results.append((k,name,er))\\n for col in range(2):\\n  print('target',col)\\n  for k,name,e in sorted(results,key=lambda q:q[2][:,col].mean())[:14]:print(k,name,'gate',e[0],'mean',e.mean(0),'worst',e.max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/operators.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: shared relaxation and oscillation with calibrated inputs -> H2: distinguish panel-aligned nonlinear readouts from raw-coordinate approximations; archived 56/16 MAE is 0.041965 scalar and 0.009713 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the worst three panel A rows as evidence of nonlinear calibration\",\n      \"rejected_reason\": \"After excluding those rows, the other 45 agree with a diagonal affine fit to within 0.0003 in row norm.\"\n    }\n  ],\n  \"rationale\": \"If a panel-aligned feature family improves held-out scalar or trajectory errors, it identifies where to refine the readout. If none improves, retain the physical temporal basis and investigate scalar residuals separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "6865ece821ed17c04434c5bb80fc702783b2f3974f22c8211037400d5d0571e2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50378.21,
+      "usage_known": true,
+      "prompt_tokens": 22178,
+      "cached_tokens": 5504,
+      "completion_tokens": 1924
+    }
+  ]
+}

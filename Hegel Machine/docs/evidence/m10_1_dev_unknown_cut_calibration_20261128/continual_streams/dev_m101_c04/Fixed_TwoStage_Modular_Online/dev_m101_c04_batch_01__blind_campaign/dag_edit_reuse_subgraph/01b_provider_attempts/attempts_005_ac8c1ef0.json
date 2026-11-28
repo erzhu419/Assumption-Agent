@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ac8c1ef041f44fdc93cd4ad3dfa1b75e",
+  "call_seq": 5,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Fixed_TwoStage_Modular_Online__dev_m101_c04_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:00:47.993557+00:00",
+  "ended_at_utc": "2026-11-28T08:01:14.482991+00:00",
+  "request_sha256": "073d20322281d875250f4e81d007a83f3af6dc06a528894267a03506e90c3d34",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 41206,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28311,
+    "cached_tokens": 9344,
+    "completion_tokens": 1030
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/probe_shared.py <<'PY'\\nexec(open('/tmp/probe_node01.py').read().split('for w in (u,x):')[0])\\nfrom scipy.optimize import least_squares\\nA=poly(x,2)\\n\\ndef fit(train, cols, kind):\\n    B=A[:,cols]; D=B[train]; Y=y[train]\\n    c=np.linalg.lstsq(D,Y,rcond=None)[0]\\n    if kind=='shared':\\n        def predict(B,p):\\n            h=B@p[:-2]\\n            return h + p[-2]*np.tanh(p[-1]*h)\\n        sol=least_squares(lambda p:predict(D,p)-Y,np.r_[0.75*c,0.45,1.5],bounds=(np.r_[np.full(len(c),-np.inf),0,0.1],np.r_[np.full(len(c),np.inf),2,8]))\\n        return predict(B,sol.x),sol.x\\n    P=np.linalg.pinv(D); R=Y-D@(P@Y)\\n    def coeff(b):\\n        F=np.tanh(D@b); G=F-D@(P@F); a=(G@R)/(G@G)\\n        return P@(Y-a*F),a\\n    def res(b):\\n        c,a=coeff(b); return D@c+a*np.tanh(D@b)-Y\\n    p=np.r_[c[:5]*0.8/np.std(D@c),np.zeros(len(c)-5)]\\n    sol=least_squares(res,p,max_nfev=200); c,a=coeff(sol.x)\\n    return B@c+a*np.tanh(B@sol.x),np.r_[c,a,sol.x]\\n\\nn=len(y); allrows=np.arange(n)\\nfolds=[('public',allrows[52:])]+[(f'block{k}',v) for k,v in enumerate(np.array_split(allrows,6))]\\nfolds += [(f'extreme{k}',np.argsort(s)[-14:]) for k,s in enumerate((np.linalg.norm(x,axis=1),abs(x[:,0]*x[:,2]),abs(x[:,1]*x[:,3])))]\\nfor label,cols,kind in [('independent full',list(range(15)),'independent'),('independent compact',[0,1,2,3,4,7,11],'independent'),('shared full',list(range(15)),'shared'),('shared compact',[0,1,2,3,4,7,11],'shared')]:\\n    print(label)\\n    for name,val in folds:\\n        tr=np.setdiff1d(allrows,val); pred,p=fit(tr,cols,kind); e=abs(pred[val]-y[val]); print(name,round(e.mean(),6),round(e.max(),6), 'coef '+str(p) if name=='public' else '')\\n    pred,p=fit(allrows,cols,kind); print('full mae/coef',np.mean(abs(pred-y)),p)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_shared.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Independent quadratic-plus-tanh readout → shared sparse quadratic score with a tanh correction; the independent model reaches 0.007786 public scalar MAE, and affine trajectory MAE is 0.004452.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Implement independent full quadratics immediately\",\"rejected_reason\":\"The two fitted coefficient vectors suggest a common score; a shared score may reduce extrapolation error with fewer fitted parameters.\"}],\"rationale\":\"Compare shared and independent scores on blocked folds and high-leverage slices. If the compact form loses accuracy there, retain the fuller basis rather than assuming the largest coefficients tell the whole story.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "fcc83ffbf9a37ac98f2000598fe1729893bc00ba30e753cfa91edba5c5be1e7f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28947.08,
+      "usage_known": true,
+      "prompt_tokens": 28311,
+      "cached_tokens": 9344,
+      "completion_tokens": 1030
+    }
+  ]
+}

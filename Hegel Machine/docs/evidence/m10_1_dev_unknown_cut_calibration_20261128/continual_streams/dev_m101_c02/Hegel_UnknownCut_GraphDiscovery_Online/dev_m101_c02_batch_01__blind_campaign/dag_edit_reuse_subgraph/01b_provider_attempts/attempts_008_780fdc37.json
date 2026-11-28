@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "780fdc370f894723a1982c01b0918e7a",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c02_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:02:25.007774+00:00",
+  "ended_at_utc": "2026-11-28T08:02:47.269713+00:00",
+  "request_sha256": "130f8ea211538173bb9b5d17890d4316519cefa1735ca421ce5735fb4614828b",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 51772,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31158,
+    "cached_tokens": 5504,
+    "completion_tokens": 837
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy\\nimport numpy as np\\np=runpy.run_path('/holdout_task/test_dag_candidate.py')\\ns, run=p['st'],p['run_dag']\\ny,t=s['train']['y'],s['train']['traj']\\nrows=np.arange(len(y))\\nblocks=np.array_split(rows,6)\\n\\ndef score(panel_b,panel_c,held):\\n    keep=~np.isin(rows,held)\\n    study=dict(s,panel_b=panel_b,panel_c=panel_c,train=dict(s['train']),test={'x':s['train']['x'][held]})\\n    for key in ('x','y','traj'):\\n        study['train'][key]=s['train'][key][keep]\\n    pred,counts=run(study)\\n    assert all(n==1 for n in counts.values())\\n    yh,sp=pred['y_hat'],pred['state_pred']\\n    assert yh.shape==y[held].shape and sp.shape==t[held].shape\\n    np.testing.assert_allclose(pred['diagnostics_vec'],[yh.mean(),yh.std(),sp[:,-1].mean(),sp[:,-1].std()])\\n    return np.mean(abs(yh-y[held])), np.mean(abs(sp-t[held]),axis=0)\\n\\ndef report(label,errors):\\n    ys,ts=zip(*errors)\\n    y_worst=np.argmax(ys)\\n    ts=np.array(ts)\\n    i,j=np.unravel_index(np.argmax(ts),ts.shape)\\n    print(label,'worst_scalar_mae',round(ys[y_worst],6),'slice',int(y_worst),'worst_trajectory_block_mae',round(float(ts.mean(axis=1).max()),6),'worst_block_horizon_mae',round(float(ts[i,j]),6),'slice',int(i),'horizon',int(j))\\n\\nb,c=s['panel_b'],s['panel_c']\\nreport('final_candidate_six_blocks',[score(b,c,held) for held in blocks])\\ndef drop(panel,i):\\n    return {k:np.delete(v,i,axis=0) for k,v in panel.items()}\\nreport('calibration_row_deletion',[score(drop(b,i),drop(c,(5*i+1)%len(c['u'])),blocks[i%len(blocks)]) for i in range(len(b['u']))])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Shared linear readout → separate quadratic scalar and two-mode Panel B/C trajectory readouts; the exact candidate passes public CV at 0.009586 scalar MAE and 0.016208 trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The official split passes, but the earlier worst-block results predate rank-two projection. Test the saved modules on all six blocks and under calibration-row deletion; a high-error slice would indicate whether to revisit the readout or the calibration fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ca47501e8e28cc3aaf5e87447ad84a73b21394ee7f54fd6f0c1330bd3689b62b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24782.19,
+      "usage_known": true,
+      "prompt_tokens": 31158,
+      "cached_tokens": 5504,
+      "completion_tokens": 837
+    }
+  ]
+}

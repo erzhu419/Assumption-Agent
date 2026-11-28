@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "62ed5e587a69446f8be2312cce401420",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Flat_MonolithicArchive_Online__dev_m101_c03_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:26:51.343327+00:00",
+  "ended_at_utc": "2026-11-28T08:27:28.250073+00:00",
+  "request_sha256": "665c2c13555b550a3ae086843a5468ba880cc8c825d74523ff6328feb58a5a62",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49037,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30619,
+    "cached_tokens": 9344,
+    "completion_tokens": 1466
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"for f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"--- $f\\\"; sed -n '/def _features/,$p' \\\"$f\\\" | grep -E 'np\\\\.|dot|mixed|ridge' | tail -20; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'variable projection exponential relaxation' | head -6; cat >/tmp/fuse06.py <<'PY'\\nfrom spatial06 import *\\nz,w,((a,b),(aw,bw))=geom(s);tr=s['train'];n=len(tr['y']); t=s['eval_times'];S=tr['traj']; y=tr['y']; T=lambda p:-np.expm1(-t[:,None]*p); p=least_squares(lambda p:(ls(T(p),S[:56].T).T@T(p).T-S[:56]).ravel(),[.4,1.8,5]).x; B=T(p);C=ls(B,S.T).T; Y=np.c_[y,C]; I=np.arange(56);J=np.arange(56,n); dot=(a*b).sum(1); ab=a[:,0]*b[:,1]; F=aff(np.c_[a,b,dot,ab]);R=Y-F[:n]@ls(F[I],Y[I]);print('residual correlation',np.round(np.corrcoef(R.T),4));print('mode regression coefficients',np.round(ls(F[I],Y[I]),4));print('y in C',ls(aff(C[I]),y[I]),np.mean(abs(y[J]-aff(C[J])@ls(aff(C[I]),y[I]))));print('resid eig',np.linalg.svd(R[I],compute_uv=False));\\ngroups={'z':z,'w':w,'a':a,'b':b,'aw':aw,'bw':bw}; fs={'dot':dot,'ab':ab}\\nfor key,V in groups.items():\\n for i,x in enumerate(V.T):fs[key+str(i)]=x\\n for i,j in combinations(range(4),2):\\n  fs[f'{key}{i}+{j}']=V[:,i]+V[:,j];fs[f'{key}{i}-{j}']=V[:,i]-V[:,j]\\nfor X1,X2 in [('a','b'),('aw','bw'),('a','bw'),('aw','b')]:\\n U,V=groups[X1],groups[X2];fs[f'{X1}dot{X2}']=np.sum(U*V,1)\\n for i,j in np.ndindex(4,4):fs[f'{X1}{i}*{X2}{j}']=U[:,i]*V[:,j]\\nfor key,x in list(fs.items()):\\n for k,f in [('sq',lambda x:x*x),('cube',lambda x:x**3),('abs',np.abs),('tanh',np.tanh),('sin',np.sin),('cos',np.cos),('rec',lambda x:x/(1+x*x)),('even',lambda x:x*x/(1+x*x))]:fs[k+'('+key+')']=f(x)\\n for k in (.25,.5,2.,4.):fs[f'tanh{k}({key})']=np.tanh(k*x);fs[f'sin{k}({key})']=np.sin(k*x);fs[f'even{k}({key})']=x*x/(1+k*x*x)\\nfor key,V in groups.items():\\n for j in range(4):\\n  for name,x in list(fs.items())[:2]:\\n   for k in (.25,1,4):fs[f'{key}{j}/(1+{k}{name}²)']=V[:,j]/(1+k*x*x)\\nfor key,V in groups.items():\\n for i,j,k in combinations(range(4),3):fs[f'{key}{i}{j}{k}']=V[:,i]*V[:,j]*V[:,k]\\nD=np.array(list(fs.values())).T; names=np.array(list(fs));\\nfor q,target in enumerate(Y.T):\\n for base in [aff(z[:,:0]),F,aff(np.c_[a,b,z,w,ab,dot])]:\\n  H=base.copy(); chosen=[]\\n  for step in range(6):\\n   U=D-H@ls(H[I],D[I]); E=target-H[:n]@ls(H[I],target[I]);norm=np.linalg.norm(U[I],axis=0); corr=np.divide(U[I].T@E[I],norm,out=np.zeros(len(norm)),where=norm>1e-7);j=np.argmax(abs(corr));chosen.append(names[j]);H=np.c_[H,D[:,j]]\\n   if step in (0,2,5):\\n    e=target-H[:n]@ls(H[I],target[I]);print(q,base.shape[1],chosen,'rmse/mae',round(np.std(e[I]),5),round(np.mean(abs(e[J])),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/fuse06.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Panel C on decoded inputs → test nonlinear fusion and independent mode drivers; 56/16 MAEs are 0.33099 for y and 0.21901 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Send both branches through panel B first\",\"rejected_reason\":\"That ordering raised 56/16 trajectory MAE from 0.22181 to 0.56267 with the same linear branch readout.\"}],\"rationale\":\"Test whether endpoint and slow-mode errors share a missing driver, and use held-out errors to distinguish nonlinear fusion terms from training-only improvements.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f59605bd293b55019cecf06b2b8406358b5e0b8209943dd26bc9aec9b6af6e26",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39440.97,
+      "usage_known": true,
+      "prompt_tokens": 30619,
+      "cached_tokens": 9344,
+      "completion_tokens": 1466
+    }
+  ]
+}

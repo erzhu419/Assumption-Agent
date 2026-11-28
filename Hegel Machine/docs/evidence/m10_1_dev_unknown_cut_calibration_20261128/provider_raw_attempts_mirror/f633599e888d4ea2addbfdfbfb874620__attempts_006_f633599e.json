@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f633599e888d4ea2addbfdfbfb874620",
+  "call_seq": 6,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Flat_MonolithicArchive_Online__dev_m101_c03_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:11:39.024006+00:00",
+  "ended_at_utc": "2026-11-28T08:12:21.179292+00:00",
+  "request_sha256": "5bd15179f53e7c2771638f0b95f9de6735f0984a25b3031191eaf698f61a18f3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44090,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27989,
+    "cached_tokens": 9344,
+    "completion_tokens": 1605
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat > /tmp/modes_probe.py <<'PY'\\nfrom probe import *\\nfrom scipy.linalg import orthogonal_procrustes\\n\\ndef orth_branch(u,v,i):\\n def f(z,p): return p[0]*z+np.tanh(p[1]*z) if i==1 else z+p[0]*z*z\\n def profile(p):\\n  g=f(u,p); m=g.mean(0); g=g-m; vm=v.mean(0)\\n  rot,sc=orthogonal_procrustes(g,v-vm); mat=rot*(sc/np.sum(g*g)); b=vm-m@mat\\n  return mat,b\\n def residual(p):\\n  mat,b=profile(p); return (f(u,p)@mat+b-v).ravel()\\n p=least_squares(residual,[.45,2.2] if i==1 else [.45],bounds=([.001,.1],[3,5]) if i==1 else (0,2)).x\\n mat,b=profile(p); print('orth',i,p,np.linalg.norm(mat[:,0]),b,'panel rms',np.std(residual(p))); return lambda z:f(z,p)@mat+b\\n\\ntr=s['train']; t=s['eval_times']; z=calibration(s['panel_a'])(tr['x']); pc=s['panel_c']; y=tr['y']; obs=tr['traj']; i=np.arange(len(y)); rng=np.random.default_rng(562)\\nfolds=[(i[:56],i[56:])]+[(np.setdiff1d(i,h),h) for h in np.array_split(rng.permutation(i),5)]\\nq=np.linalg.norm(z,axis=1); ex=np.argsort(q)[-16:]; folds.append((np.setdiff1d(i,ex),ex))\\nfor branchfun in [branch,orth_branch]:\\n a,b=[branchfun(pc['u'],pc['v'+str(j)],j)(z) for j in [1,2]]; dot=np.sum(a*b,axis=1); cross=a[:,0]*b[:,1]; E=af(np.c_[a,b,dot]); S=np.c_[b,cross]; F=np.c_[a,dot]; W=af(np.c_[a,b,dot,cross]);\\n def time(r):return -np.expm1(-t[:,None]*r)\\n for mode in ['linear','full_time','separate','shared','shared0','shared_no_dot','separate_no_dot']:\\n  errs=[]; pars=[]\\n  for u,v in folds+[(i,i)]:\\n   py=E[v]@fit(E[u],y[u]); o=obs[u]\\n   if mode=='linear': pred=W[v]@fit(W[u],o)\\n   else:\\n    if mode=='full_time': D,G=W,W\\n    else:\\n     D=S if mode!='shared0' else af(S)\\n     G=F if 'no_dot' not in mode else a\\n     if mode.startswith('separate'):G=np.c_[G,S]\\n     if mode in ['shared0','separate','separate_no_dot']: G=af(G)\\n    def design(j,p):\\n     ts,tf=time(p[:2]).T; ts=ts+(p[2]*tf if len(p)>2 else 0)\\n     return np.column_stack(((D[j,None,:]*ts[None,:,None]).reshape(len(j)*len(t),-1),(G[j,None,:]*tf[None,:,None]).reshape(len(j)*len(t),-1)))\\n    def profile(p,j=u):\\n     X=design(j,p); coef=fit(X,o.ravel()); return X@coef-o.ravel(),coef\\n    params=[.4,1.8,.12] if mode.startswith('shared') else [.4,1.8]; lo=[.1,1.,-.4][:len(params)]; hi=[.85,3.,.6][:len(params)]\\n    r=least_squares(lambda p:profile(p)[0],params,bounds=(lo,hi)).x; err,co=profile(r); pars.append(r); pred=(design(v,r)@co).reshape(len(v),len(t))\\n   er=np.mean(abs(pred-obs[v]),axis=0); errs.append([np.mean(abs(py-y[v])),er.mean(),er[-1],er.max()]);\\n  print(mode,'56/16',np.round(errs[0],6),'worst',np.round(np.max(errs[:-1],axis=0),6),'insample',np.round(errs[-1],6));\\n  if mode in ['shared','shared0','separate']:\\n   print('rates/mix',np.round(pars,5),'training coefficients',np.round(co,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/modes_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Cyclic calibration plus parallel panel C branches → sparse drivers with shared two-rate dynamics; the calibrated dot/cross model has worst-slice MAE 0.00911 for y and 0.01015 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Insert panel B before the parallel branches\",\"rejected_reason\":\"On the 56/16 split, that insertion raises MAE from about 0.008/0.009 to 0.122/0.114 for the same endpoint and trajectory features.\"},{\"option\":\"Use an unrestricted spatial fit at each timestamp\",\"rejected_reason\":\"Keep it as a baseline; the two-mode model may reduce variance, particularly at the final horizon and on high-amplitude inputs.\"}],\"rationale\":\"Compare free and structured temporal fits with rates estimated inside each fold. Check whether scaled-orthogonal panel maps and shared slow-to-fast coupling improve held-out error, including the outer-radius slice and final horizon.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "d9cf91b86f8e94ee3e62dd28ee05ec1a55da93019cdaa9c048eac2fe5186d9cc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44667.22,
+      "usage_known": true,
+      "prompt_tokens": 27989,
+      "cached_tokens": 9344,
+      "completion_tokens": 1605
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8387202809b04bba8a71bd13c0269895",
+  "call_seq": 4,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Flat_MonolithicArchive_Online__dev_m101_c02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:24:27.659830+00:00",
+  "ended_at_utc": "2026-11-28T08:24:50.667120+00:00",
+  "request_sha256": "0634cebbce7257a045553047440871f56f3690ed3292218a686955a684fb3d64",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 29336,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21542,
+    "cached_tokens": 9344,
+    "completion_tokens": 697
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*batch_02_solver.py /tmp/hegel_continual_archive/*batch_03_solver.py; cat >/tmp/probe05.py <<'PY'\\nimport numpy as np, pickle, pathlib, importlib.util\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,T=(tr[k] for k in ('x','y','traj'))\\nls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\naff=lambda x:np.c_[np.ones(len(x)),x]\\nnp.set_printoptions(precision=5,suppress=True)\\nprint('telemetry',s['telemetry_vec'],'trajectory singular values',np.linalg.svd(T,compute_uv=False))\\nfor p in pathlib.Path('/tmp/hegel_continual_archive').glob('*solver.py'):\\n sp=importlib.util.spec_from_file_location('prior',p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\n ss=dict(s,train={k:v[:56] for k,v in tr.items()},test={'x':x[56:]})\\n try:\\n  o=m.solve_batch(ss); print(p.name, np.mean(abs(y[56:]-o['y_hat'])),np.mean(abs(T[56:]-o['state_pred'])))\\n except Exception as e: print(p.name,e)\\nfor p in ('panel_a','panel_b','panel_c'):\\n u=s[p]['u']; keep=np.max(abs(s[p].get('v',u)-u),axis=1)<2 if p=='panel_a' else np.ones(len(u),bool); u=u[keep]\\n for name,V in s[p].items():\\n  if name=='u':continue\\n  v=V[keep]; print(p,name,len(u));\\n  for a in [aff(u),np.c_[aff(u),u**2,u**3],np.c_[aff(u),u**3,((u-1)*np.roll(u,-1,axis=1))]]:\\n   r=v-a@ls(a,v); print('rmse / max',np.sqrt(np.mean(r*r)),np.max(abs(r)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe05.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: calibrated shared operators -> H2: identify the active nonlinear stage; rejected baseline MAEs are 0.277527 for scalar and 0.270754 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure archive transfer, panel residuals, and temporal rank separately. These checks distinguish a failed coordinate inversion from a missing nonlinear feature or a different temporal basis.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "171f955c7ddaafb8606bd993f1795d8b0ef9298ffc0a0d07c0c1a022c1b592e8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22971.17,
+      "usage_known": true,
+      "prompt_tokens": 21542,
+      "cached_tokens": 9344,
+      "completion_tokens": 697
+    }
+  ]
+}

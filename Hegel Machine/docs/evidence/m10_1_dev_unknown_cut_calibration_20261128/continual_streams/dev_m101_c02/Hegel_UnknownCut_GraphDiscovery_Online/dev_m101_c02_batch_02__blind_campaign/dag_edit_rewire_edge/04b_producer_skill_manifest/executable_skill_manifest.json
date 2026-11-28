@@ -1,0 +1,119 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_m101_c02_batch_02_555cb14c7795",
+    "source_hash": "555cb14c7795282c9cd004098494c52c8949358a979606fa65dcf563883c93ef",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_rewire_edge",
+    "task_id": "dev_m101_c02_batch_02__blind_campaign__rewire_edge",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/mixed_probe.py",
+        "archived_relpath": "producers/tmp__mixed_probe.py",
+        "bytes": 2941,
+        "sha256": "34fdde5b040b406762c23f0eaba9849a66c67e461cdeadc29750f01e5d1c3202"
+      },
+      {
+        "container_path": "/tmp/readout_probe.py",
+        "archived_relpath": "producers/tmp__readout_probe.py",
+        "bytes": 2125,
+        "sha256": "72c427d22f43e9e8efbbf8896aa981ab71f0ddd017fbd397a50952c0059ce828"
+      },
+      {
+        "container_path": "/tmp/saturation_probe.py",
+        "archived_relpath": "producers/tmp__saturation_probe.py",
+        "bytes": 2772,
+        "sha256": "7b15310029e6d72b79829824d48d1df6c139b33711344061bb4902ff1349cca7"
+      },
+      {
+        "container_path": "/tmp/smooth_probe.py",
+        "archived_relpath": "producers/tmp__smooth_probe.py",
+        "bytes": 3041,
+        "sha256": "b2d38060d93404dc26c40bd80e2c52de073f028d7ce8be042ae6fc693917201c"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m101_c02_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m101_c02_batch_00_solver.py",
+        "bytes": 1892,
+        "sha256": "ce1a2f606d4d41f388cbe2521753f6892c9672638d6f979f9084b40ce42bbc7d"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json _frozen_nodes/node_00.py _frozen_nodes/node_01.py test_dag_candidate.py validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_batch.pkl','rb') as f: d=pickle.load(f)\ndef show(d,p=''):\n for k,v in d.items():\n  if isinstance(v,dict): show(v,p+k+'.')\n  else:\n   a=np.asarray(v); print(p+k,a.shape,a.dtype,'sample:',str(a[:2] if a.ndim else a)[:450])\nshow(d)\nPY",
+      "cd /holdout_task && sed -n '30,94p' test_dag_candidate.py && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_batch.pkl','rb') as f: d=pickle.load(f)\nprint('cases',len(d),'case keys', [list(q) for q in d])\ndef show(d,p=''):\n for k,v in d.items():\n  if isinstance(v,dict): show(v,p+k+'.')\n  else:\n   a=np.asarray(v); print(p+k,a.shape,a.dtype,'sample:',str(a[:2] if a.ndim else a)[:380])\nshow(d[0]['study'])\nPY",
+      "cat >/tmp/readout_probe.py <<'PY'\nimport numpy as np,pickle,runpy\nfrom itertools import combinations_with_replacement\np='/holdout_task/'\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; a=runpy.run_path(p+'_frozen_nodes/node_00.py')['run_node']({'__input__':s}); b=runpy.run_path(p+'_frozen_nodes/node_01.py')['run_node']({'node_00':a}); u,z=a['u_tr'],b['z_tr']; y,t=s['train']['y'],s['train']['traj']; U,V=s['panel_b'].values(); B=np.linalg.lstsq(np.c_[np.ones(len(U)),U],V,rcond=None)[0]; C=s['panel_c']; print('panel B affine residual',np.max(abs(np.c_[np.ones(len(U)),U]@B-V))); print(",
+      "cat >/tmp/mixed_probe.py <<'PY'\nimport numpy as np,pickle,runpy\nfrom itertools import combinations_with_replacement\np='/holdout_task/'\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; a=runpy.run_path(p+'_frozen_nodes/node_00.py')['run_node']({'__input__':s}); b=runpy.run_path(p+'_frozen_nodes/node_01.py')['run_node']({'node_00':a}); u,z=a['u_tr'],b['z_tr']; y=s['train']['y']; n=len(y); ids=np.arange(n)\nx=np.c_[u,z]; nm=[f'{c}{i}' for c in 'uz' for i in range(4)]; L=np.c_[np.ones(n),u]; fs=[]; names=[]\ndef add(name,v): names.append(name); fs.append(v)\nfor d in (2,3,4):\n for jj in co",
+      "PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'variable projection nonlinear readout ridge' 2>/dev/null || true\ncat >/tmp/smooth_probe.py <<'PY'\nimport pickle,runpy,numpy as np\nfrom scipy.spatial.distance import cdist\nfrom itertools import combinations_with_replacement\nfrom math import factorial\np='/holdout_task/'; s=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']\na=runpy.run_path(p+'_frozen_nodes/node_00.py')['run_node']({'__input__':s}); b=runpy.run_path(p+'_frozen_nodes/node_01.py')['run_node']({'node_00':a})\nu,z=a['u_tr'],b['z_tr']; y=s['train']['y']; n=len(y); I=np.ar",
+      "cat /holdout_task/_frozen_nodes/node_00.py /holdout_task/_frozen_nodes/node_01.py\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'separable nonlinear least squares variable projection' 2>/dev/null || true\ncat >/tmp/saturation_probe.py <<'PY'\nimport numpy as np,pickle,runpy\nfrom scipy.optimize import least_squares\nfrom itertools import combinations_with_replacement\np='/holdout_task/'; s=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; a=runpy.run_path(p+'_frozen_nodes/node_00.py')['run_node']({'__input__':s}); b=runpy.run_path(p+'_frozen_nodes/node_01.py')['run_node']({'node",
+      "set -e\ncd /holdout_task\ncat >node_02.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _affine(x):\n    return np.column_stack((np.ones(len(x)), x))\n\n\ndef _mixed(u, z, z_mean):\n    products = (u[:, :, None] * (z - z_mean)[:, None, :]).reshape(len(u), -1)\n    return np.column_stack((_affine(u), products))\n\n\ndef _scalar(u_tr, z_tr, u_te, z_te, y):\n    z_mean = z_tr.mean(axis=0)\n    design = _mixed(u_tr, z_tr, z_mean)\n    query = _mixed(u_te, z_te, z_mean)\n    # The affine mapping makes some mixed products linearly dependent.\n    _, singular, right = np.linalg.svd(design,",
+      "set -e\nexport OPENBLAS_NUM_THREADS=1\npython3 -I - <<'PY'\nimport pickle\nimport runpy\nfrom pathlib import Path\nimport numpy as np\n\nroot = Path('/holdout_task')\nwith (root / 'public_batch.pkl').open('rb') as f:\n    cases = pickle.load(f)\ncalibrate = runpy.run_path(str(root / '_frozen_nodes/node_00.py'))['run_node']\nmap_coords = runpy.run_path(str(root / '_frozen_nodes/node_01.py'))['run_node']\nsink = runpy.run_path(str(root / 'node_02.py'))['run_node']\n\ndef predict(study):\n    a = calibrate({'__input__': study})\n    b = map_coords({'node_00': a})\n    result = sink({'__input__': study, 'node_00': "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__smooth_probe.py",
+      "primary_producer_container_path": "/tmp/smooth_probe.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_02.py",
+        "filename": "node_02.py",
+        "bytes": 1935,
+        "sha256": "5d5ee9c51f4c8e08b5e70011b436e21cfc0f5d60bc7c809cf66d92bd87f7230a",
+        "content_addressed_ref": "content_addressed_blobs/5d5ee9c51f4c8e08b5e70011b436e21cfc0f5d60bc7c809cf66d92bd87f7230a.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_02.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "555cb14c7795282c9cd004098494c52c8949358a979606fa65dcf563883c93ef",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "set -e\nexport OPENBLAS_NUM_THREADS=1\npython3 -I - <<'PY'\nimport pickle\nimport runpy\nfrom pathlib import Path\nimport numpy as np\n\nroot = Path('/holdout_task')\nwith (root / 'public_batch.pkl').open('rb') as f:\n    cases = pickle.load(f)\ncalib",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "555cb14c7795282c9cd004098494c52c8949358a979606fa65dcf563883c93ef",
+        "expected_candidate_sha256": "555cb14c7795282c9cd004098494c52c8949358a979606fa65dcf563883c93ef",
+        "computed_candidate_sha256": "555cb14c7795282c9cd004098494c52c8949358a979606fa65dcf563883c93ef",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_02.py",
+            "bytes": 1935
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_555cb14c"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": []
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c418ab3a056846babff94702c2ef851f",
+  "call_seq": 12,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c01_batch_05__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:27:45.085302+00:00",
+  "ended_at_utc": "2026-11-28T08:28:28.512065+00:00",
+  "request_sha256": "14a527f91d69187736ef850bf43f08fbf28f306cbd545f9ab655c6d039b43609",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62926,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33636,
+    "cached_tokens": 9344,
+    "completion_tokens": 1895
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed '/^if __name__/,$d' /tmp/gp05.py > /tmp/final05.py\\ncat >> /tmp/final05.py <<'PY'\\n\\ndef panel_operator(u, v, quadratic):\\n    def design(x, w):\\n        terms = (x, x*x) if quadratic else (x,)\\n        return np.column_stack((np.ones(len(x)), *terms, np.sin(x*w), np.cos(x*w)))\\n\\n    def residual(w):\\n        f = design(u, w)\\n        return (f @ np.linalg.lstsq(f, v, rcond=None)[0] - v).ravel()\\n\\n    fit = min((least_squares(residual, np.full(u.shape[1], start),\\n                             bounds=(.3, 5), max_nfev=120)\\n               for start in (1., 2., 3.5, 4.5)), key=lambda result: result.cost)\\n    w = fit.x\\n    coef = np.linalg.lstsq(design(u, w), v, rcond=None)[0]\\n    return lambda x: design(x, w) @ coef\\n\\n\\ndef operator_kernels(u, n):\\n    u = (u - u[:n].mean(0)) / np.maximum(u[:n].std(0), 1e-7)\\n    g = u @ u.T / u.shape[1]\\n    return np.array([g, g*g, np.exp(-cdist(u, u, 'sqeuclidean')/8)])\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = np.concatenate((train['x'], study['test']['x']))\\n    n = len(train['x'])\\n    a = affine(study['panel_a'], 'v', True)\\n    b = affine(study['panel_b'], 'v')\\n    q = apply(a, x)\\n    r = apply(b, q)\\n    panel = study['panel_c']\\n    c = panel_operator(panel['u'], panel['v1'], False)\\n    d = panel_operator(panel['u'], panel['v2'], True)\\n    extra = np.concatenate([operator_kernels(u, n) for u in (c(q), d(q), c(r), d(r))])\\n    panel_k = np.concatenate((blocks(study, x, n, 'panel')[0], extra))\\n    smooth_k = blocks(study, x, n, 'smooth')[0]\\n    target_panel = predict(panel_k, train['y'])[0][:, 0]\\n    target_smooth = predict(smooth_k, train['y'])[0][:, 0]\\n    y_hat = .8*target_panel + .2*target_smooth\\n    basis = temporal(study['eval_times'], train['traj'])\\n    state_k = np.concatenate((smooth_k, extra))\\n    state = predict(state_k, train['traj'] @ basis)[0] @ basis.T\\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), state[:, -1].mean(), state[:, -1].std()])\\n    return {'y_hat': y_hat, 'state_pred': state, 'diagnostics_vec': diagnostics}\\nPY\\n# Keep flat kernel contractions single-pass regardless of the host BLAS thread count.\\npython3 - <<'PY'\\np='/tmp/final05.py'\\ns=open(p).read().replace('w@kf',\\\"np.einsum('i,ij->j',w,kf)\\\").replace('w@lf',\\\"np.einsum('i,ij->j',w,lf)\\\").replace('kf@(m*inv-a@a.T).ravel()',\\\"np.einsum('ij,j->i',kf,(m*inv-a@a.T).ravel())\\\").replace('from itertools import combinations_with_replacement\\\\n','')\\nopen(p,'w').write(s)\\nPY\\ncp /tmp/final05.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nbase='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',base+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(base+'public_batch.pkl','rb'))[0]['study']\\nx=s['train']['x']; n=len(x)\\ndist=np.linalg.norm(x[:,None]-x[None,:],axis=2);np.fill_diagonal(dist,np.inf)\\nfolds=[np.arange(n)]+[np.random.default_rng(k).permutation(n) for k in [*range(135,141),*range(806,810)]]+[np.argsort(np.linalg.norm(x,axis=1)),np.argsort(dist.min(axis=1))]\\nres=[]\\nfor ids in folds:\\n i,j=ids[:56],ids[56:]; train={k:v[i] for k,v in s['train'].items() if k!='summary'}; y=train['y']; end=train['traj'][:,-1]; train['summary']=np.array([y.mean(),y.std(),end.mean(),end.std()]); o=m.solve_batch(dict(s,train=train,test={'x':x[j]}))\\n p=o['y_hat']; q=o['state_pred']; yy=s['train']['y'][j]; zz=s['train']['traj'][j]; assert p.shape==yy.shape and q.shape==zz.shape and all(np.isfinite(v).all() for v in o.values())\\n np.testing.assert_allclose(o['diagnostics_vec'],[p.mean(),p.std(),q[:,-1].mean(),q[:,-1].std()])\\n res.append([np.abs(p-yy).mean(),np.abs(q-zz).mean(),np.abs(q[:,-1]-zz[:,-1]).mean(),np.abs(q[:,-1]-yy).mean()]);\\nr=np.array(res);print('columns: target, trajectory, terminal, terminal-as-target MAE');print('56/16:',r[0]);print('ordinary worst:',r[:-2].max(0));print('support edges:',r[-2:]);assert r[0,0]<.04 and r[:,0].max()<.06 and r[:,1].max()<.013 and r[:,2].max()<.019\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine Panel C proxies → H2 nonlinear Panel C features with a blended target readout; the selected branches reached worst-slice MAEs of 0.05608 for target, 0.01193 for trajectory, and 0.01778 for terminal state across 13 splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Predict the two trajectory amplitudes independently\",\n      \"rejected_reason\": \"Although better on ordinary folds, this increased the high-norm slice trajectory and terminal MAEs to 0.01282 and 0.02046.\"\n    }\n  ],\n  \"rationale\": \"Promote the nonlinear-panel model based on lower worst-slice errors. Verify the exact saved solver in an isolated Python process; a metric regression would indicate that the packaged implementation did not reproduce the probe.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "184eaa65d349f328913d1a85a1a7a774d33da67605c74565746d207175738465",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48577.49,
+      "usage_known": true,
+      "prompt_tokens": 33636,
+      "cached_tokens": 9344,
+      "completion_tokens": 1895
+    }
+  ]
+}

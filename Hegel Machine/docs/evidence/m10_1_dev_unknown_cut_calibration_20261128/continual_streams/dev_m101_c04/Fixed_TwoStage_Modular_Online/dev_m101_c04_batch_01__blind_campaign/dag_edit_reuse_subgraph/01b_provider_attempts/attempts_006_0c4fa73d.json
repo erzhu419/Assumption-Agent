@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c4fa73d677c47228a3de98ed8d52c6d",
+  "call_seq": 6,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Fixed_TwoStage_Modular_Online__dev_m101_c04_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:01:16.057769+00:00",
+  "ended_at_utc": "2026-11-28T08:01:46.809382+00:00",
+  "request_sha256": "8267ec1d178a9c8bcd06e396ef1a5c1236de97832cea100f693806cdb408f98e",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42555,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29069,
+    "cached_tokens": 9344,
+    "completion_tokens": 1212
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_01.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(z):\\n    return np.column_stack((np.ones(len(z)), z))\\n\\n\\ndef _scalar_basis(z, affine):\\n    return np.column_stack((affine, z[:, 0] * z[:, 2], z[:, 1] * z[:, 3]))\\n\\n\\ndef _scalar_predict(basis, params):\\n    score = basis @ params[:-2]\\n    return score + params[-2] * np.tanh(params[-1] * score)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    data = inputs['node_00']\\n    z_tr, z_te = data['z_tr'], data['z_te']\\n    tr, te = _affine(z_tr), _affine(z_te)\\n    state_pred = te @ np.linalg.lstsq(tr, data['traj'], rcond=None)[0]\\n\\n    basis = _scalar_basis(z_tr, tr)\\n    y = data['y']\\n    linear = np.linalg.lstsq(basis, y, rcond=None)[0]\\n    fit = least_squares(\\n        lambda p: _scalar_predict(basis, p) - y,\\n        np.r_[0.75 * linear, 0.45, 1.5],\\n        bounds=(np.r_[np.full(len(linear), -np.inf), 0., 0.1],\\n                np.r_[np.full(len(linear), np.inf), 2., 8.]),\\n    )\\n    y_hat = _scalar_predict(_scalar_basis(z_te, te), fit.x)\\n    endpoint = state_pred[:, -1]\\n    return {\\n        'y_hat': y_hat,\\n        'state_pred': state_pred,\\n        'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), endpoint.mean(), endpoint.std()]),\\n    }\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/test_dag_candidate.py && python3 -I /holdout_task/test_dag_candidate.py && python3 -I - <<'PY'\\nimport pickle\\nimport runpy\\nimport numpy as np\\n\\nbase = '/holdout_task/'\\nup = runpy.run_path(base + '_frozen_nodes/node_00.py')['run_node']\\nrun = runpy.run_path(base + 'node_01.py')['run_node']\\nwith open(base + 'public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\nd = up({'__input__': study})\\nx, y, traj = d['z_tr'], d['y'], d['traj']\\nrows = np.arange(len(y))\\nslices = {'public': rows[52:]}\\nslices.update({f'block{i}': v for i, v in enumerate(np.array_split(rows, 6))})\\nslices.update({name: np.argsort(score)[-14:] for name, score in [('norm', np.linalg.norm(x, axis=1)), ('x0_x2', abs(x[:, 0]*x[:, 2])), ('x1_x3', abs(x[:, 1]*x[:, 3]))]})\\nfor name, val in slices.items():\\n    tr = np.setdiff1d(rows, val)\\n    p = run({'node_00': {**d, 'z_tr': x[tr], 'z_te': x[val], 'y': y[tr], 'traj': traj[tr]}})\\n    e = abs(p['y_hat'] - y[val]).mean()\\n    t = abs(p['state_pred'] - traj[val]).mean(axis=0)\\n    print(f'{name}: scalar MAE={e:.6f}; trajectory MAE={t.mean():.6f}; worst horizon MAE={t.max():.6f}')\\n    assert e <= .035 and t.max() <= .035\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Independent quadratic-plus-tanh → shared sparse quadratic with tanh correction; the prototype reaches 0.003401 public scalar MAE and 0.005186 worst-slice scalar MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use independent full quadratic scores\",\n      \"rejected_reason\": \"Worst-slice scalar MAE was 0.010656 versus 0.005186 for the shared sparse score.\"\n    }\n  ],\n  \"rationale\": \"Implement the best validated scalar structure while retaining the affine trajectory fit. Run the official contract check and verify the written artifact on blocked and high-leverage slices, including each trajectory horizon.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "3cd3f2209f22fef8ac3e3a30e766e61db6f0c57677a11bd504d6245d5578d627",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33215.24,
+      "usage_known": true,
+      "prompt_tokens": 29069,
+      "cached_tokens": 9344,
+      "completion_tokens": 1212
+    }
+  ]
+}

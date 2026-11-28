@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dbad942ded854d4baef88b05960b238a",
+  "call_seq": 11,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Fixed_TwoStage_Modular_Online__dev_m101_c01_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:05:15.692958+00:00",
+  "ended_at_utc": "2026-11-28T08:05:47.795315+00:00",
+  "request_sha256": "e420e01c27f5680550cdfc73562a3eafe6b8bce6e94955807780bd9067a8d46c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64582,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36457,
+    "cached_tokens": 9344,
+    "completion_tokens": 1197
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\n{ printf '%s\\\\n' '\\\"\\\"\\\"Predict scalar and trajectory outputs from the measured training pairs.\\\"\\\"\\\"'; sed '/^if __name__/,$d' /tmp/gp_batch.py | sed '/^from scipy.spatial.distance import cdist$/d'; sed '/^if __name__/,$d' /tmp/rat_final.py | sed '/^import numpy as np$/d'; cat <<'PY'\\n\\ndef _components(x, y, z, q):\\n    scalar = np.column_stack([\\n        rat(x, y, q, (2, 'rad3', .035))[0],\\n        rat(x, y, q, (3, 'rad2', .25))[0],\\n        rat(x, y, q, (3, 'qrad', .25))[0],\\n        gp(x, y, q, 'rq')[0][:, 0],\\n    ])\\n    basis = np.linalg.svd(z, full_matrices=False)[2][:2]\\n    amplitudes = z @ basis.T\\n    state = np.stack([\\n        gp(x, amplitudes, q, 'poly')[0] @ basis,\\n        gp(x, amplitudes, q, 'rbf')[0] @ basis,\\n        np.column_stack([gp(x, a, q, 'rbf')[0][:, 0] for a in amplitudes.T]) @ basis,\\n    ])\\n    return scalar, state\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    scalar, state = _components(train['x'], train['y'], train['traj'], study['test']['x'])\\n    y_hat = scalar @ np.array([.25, .30, .30, .15])\\n    state_pred = np.average(state, axis=0, weights=[.4, .2, .4])\\n    end = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), end.mean(), end.std()])}\\nPY\\n} > batch_solver.py\\ncat > /tmp/verify_batch.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import _components\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study=pickle.load(f)[0]['study']\\nx,y,z=[study['train'][k] for k in ('x','y','traj')]\\nrows=np.arange(len(x)); radius=np.linalg.norm(x,axis=1)\\nfolds=[('ordered',rows[56:]), *[(f'shuffle{i}',j) for i,j in enumerate(np.array_split(np.random.default_rng(22).permutation(len(x)),5))], ('outer-radius',np.argsort(radius)[-14:]), *[(f'axis{i}',np.argsort(abs(x[:,i]))[-14:]) for i in range(4)]]\\nfor name,j in folds:\\n    i=np.setdiff1d(rows,j)\\n    a,b=_components(x[i],y[i],z[i],x[j]); p=a@np.array([.25,.30,.30,.15]); q=np.average(b,axis=0,weights=[.4,.2,.4]); print(name,'blended', np.round([np.abs(p-y[j]).mean(),np.abs(q-z[j]).mean(),np.abs(q[:,-1]-z[j,-1]).mean()],6),'components',np.abs(a-y[j,None]).mean(0).round(5),np.abs(b-z[j]).mean((1,2)).round(5),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_batch.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (single Gaussian process) -> H2 (structured scalar ensemble with independent rank-two trajectory modeling); the best tested rational component reduced high-radius scalar MAE from 0.12266 to 0.0683.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a single rational scalar model\",\n      \"rejected_reason\": \"The candidates differ in ordinary-fold and high-radius performance; test whether blending reduces the worst error before choosing one.\"\n    }\n  ],\n  \"rationale\": \"Save the deliverable now. Compare it with its components on ordered, shuffled, high-radius, and coordinate-edge holdouts; if blending worsens edge performance, revise it. Check trajectory and terminal-state errors separately, then verify the public schema.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "f59b500ed46e3b9549d6ca71cd57935dfda86ec3f1aaf89481d253df44d2239b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34613.27,
+      "usage_known": true,
+      "prompt_tokens": 36457,
+      "cached_tokens": 9344,
+      "completion_tokens": 1197
+    }
+  ]
+}

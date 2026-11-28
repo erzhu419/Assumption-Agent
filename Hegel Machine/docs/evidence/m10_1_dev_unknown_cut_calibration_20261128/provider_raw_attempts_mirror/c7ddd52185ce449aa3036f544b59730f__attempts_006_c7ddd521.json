@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c7ddd52185ce449aa3036f544b59730f",
+  "call_seq": 6,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:01:48.755835+00:00",
+  "ended_at_utc": "2026-11-28T08:02:21.276053+00:00",
+  "request_sha256": "dcaef9e51753d1c832d87b208780beec91fb64b277f9d3432449ceaa04ab984a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49706,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31395,
+    "cached_tokens": 9344,
+    "completion_tokens": 1295
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/coupled.py <<'PY'\\nimport pickle,runpy,itertools\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; old=runpy.run_path('/tmp/hegel_continual_archive/dev_m101_c04_batch_00_solver.py'); tr=s['train']; y=tr['y']; z=old['_coordinates'](tr['x'],old['_calibration'](s)); c=old['_cross'](z); n=len(y)\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\nw=ls(np.c_[z,c],y); d=z@w[:4]; pairs=np.column_stack([z[:,i]*z[:,j] for i,j in itertools.combinations_with_replacement(range(4),2)]); one=np.ones(n); rng=np.random.default_rng(125); folds=[(np.arange(56),np.arange(56,n))]+[(p[:56],p[56:]) for p in [rng.permutation(n) for _ in range(4)]]; p=np.argsort(abs(d));folds.append((p[:56],p[56:]));\\ndef tanh(x):return np.tanh(x)\\ndef rat(x):return x/(1+x*x)\\ndef sqrt(x):return x/np.sqrt(1+x*x)\\ndef atan(x):return np.arctan(x)\\nfor name,f in [('tanh',tanh),('rat',rat),('sqrt',sqrt),('atan',atan),('sin',np.sin)]:\\n for stage in ['through','single','gated','general','shared','sharedplus']:\\n  out=[]; cp=[]\\n  for a,b in folds:\\n   w0=ls(np.c_[z[a],c[a]],y[a]); v=w0[:4]; norm=np.linalg.norm(v)\\n   def design(p,i):\\n    if stage.startswith('shared'):\\n     h=z[i]@p[:4]+p[4]*c[i]; return np.c_[h,f(h+p[5]),c[i]] if stage=='sharedplus' else np.c_[h,f(h+p[5])]\\n    h=z[i]@p[:4]+p[4]; F=f(h+(p[5]*c[i] if stage in ('through','general') else 0)); B=np.c_[one[i],z[i],c[i],F];\\n    if stage=='gated':B=np.c_[B,c[i]/(1+h*h),c[i]*np.tanh(h)]\\n    if stage=='general':B=np.c_[B,pairs[i]]\\n    return B\\n   def obj(p):\\n    D=design(p,a);return D@ls(D,y[a])-y[a]\\n   fits=[]\\n   for scale in (0.65,1.3,2.0):\\n    for gate in (-.35,0,.35) if stage in ('through','general') else (0.25,):\\n     p0=np.r_[v*scale,gate if stage.startswith('shared') else 0.,0. if stage.startswith('shared') else gate] if stage!='single' and stage!='gated' else np.r_[v*scale,0.];fits.append(least_squares(obj,p0,bounds=(-8,8),max_nfev=120))\\n   r=min(fits,key=lambda x:x.cost); w1=ls(design(r.x,a),y[a]); out.append(np.mean(abs(design(r.x,b)@w1-y[b])));cp.append((np.linalg.norm(r.fun)/np.sqrt(len(a)),np.round(r.x,4),np.round(w1,4)))\\n  print(name,stage,np.round(out,5),cp[0],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -u /tmp/coupled.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent latent saturation plus cross interaction -> H2 test whether the interaction also enters the saturation; the best previous quadratic-plus-tanh fit had 0.0242 worst MAE across five 56/16 splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use quadratic plus tanh immediately\",\n      \"rejected_reason\": \"The fitted saturation direction aligns with the dominant linear response, suggesting a simpler shared latent score that may extrapolate better.\"\n    }\n  ],\n  \"rationale\": \"Fit each candidate only on the corresponding training rows. Compare additive, gated, and shared-latent models on the canonical split, shuffled splits, and a high-magnitude holdout; retain the simpler additive model if coupling fails to improve the worst slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "7613aa51dc06382af466d606d72db9e9cf5b9981889e6bcf5d06a1619ac7f916",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35039.62,
+      "usage_known": true,
+      "prompt_tokens": 31395,
+      "cached_tokens": 9344,
+      "completion_tokens": 1295
+    }
+  ]
+}

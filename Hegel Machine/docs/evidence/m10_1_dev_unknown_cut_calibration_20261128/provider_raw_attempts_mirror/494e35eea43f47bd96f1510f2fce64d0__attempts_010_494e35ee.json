@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "494e35eea43f47bd96f1510f2fce64d0",
+  "call_seq": 10,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Flat_MonolithicArchive_Online__dev_m101_c03_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:28:56.146174+00:00",
+  "ended_at_utc": "2026-11-28T08:29:26.928021+00:00",
+  "request_sha256": "30a8d9361503eb7d3bcec1df620c141d245d89f806a9144037aca8a714e0865f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65741,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36649,
+    "cached_tokens": 9344,
+    "completion_tokens": 1148
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/validate06.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch,_design,_geometry,_ls,_time_fit\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y,S=tr['y'],tr['traj']; t=s['eval_times']; H=_design(*_geometry(s,tr['x'])); n=len(y)\\ndef fit(i,j,model):\\n    Y=np.column_stack((y,S)); A=_ls(H[i],Y[i]); yhat=H[j]@A[:,0]; P=H\\n    if model.startswith('shared'):\\n        # Use the endpoint to identify the common spatial contribution, without using held-out endpoints.\\n        cut=int(model.split(':')[1]); P=np.column_stack((H[:,:cut],H[:,cut:]@A[cut:,0])); A=_ls(P[i],S[i]);\\n    else: A=A[:,1:]\\n    pred=P[j]@A\\n    if model!='direct':\\n        if model=='two':\\n            from scipy.optimize import least_squares\\n            basis=lambda k:-np.expm1(-t[:,None]*k)\\n            Q=P[i]@A\\n            def err(k):\\n                B=basis(k); return (B@_ls(B,Q.T)-Q.T).ravel()\\n            B=basis(least_squares(err,[.45,2.5],bounds=(.01,15)).x)\\n        else: B=_time_fit(t,S[i],P[i]@A)\\n        pred=(_ls(B,pred.T).T)@B.T\\n    return yhat,pred\\nrng=np.random.default_rng(42); splits={'56/16':np.arange(56,n)}\\nfor k in range(4): splits['random'+str(k)]=rng.permutation(n)[:16]\\nz,*_=_geometry(s,tr['x']); r=np.linalg.norm(z,axis=1); splits['outer radius']=np.argsort(r)[-16:]; splits['inner radius']=np.argsort(r)[:16]\\nfor model in ['direct','two','three','shared:11','shared:15','shared:21']:\\n    metrics=[]\\n    for key,j in splits.items():\\n        i=np.setdiff1d(np.arange(n),j); a,b=fit(i,j,model); err=abs(b-S[j]); metrics.append([np.mean(abs(a-y[j])),err.mean(),err.mean(0).max(),err[:,-1].mean()]);\\n        if model=='three':\\n            sub=dict(s,train={k:(v[i] if k in ('x','y','traj') else v) for k,v in tr.items()},test={'x':tr['x'][j]}); q=solve_batch(sub); assert np.allclose(q['y_hat'],a) and np.allclose(q['state_pred'],b); e=b[:,-1]; assert np.allclose(q['diagnostics_vec'],[a.mean(),a.std(),e.mean(),e.std()])\\n    m=np.array(metrics); print(model,'56/16',m[0].round(6),'mean',m.mean(0).round(6),'worst',m.max(0).round(6),'worst slices',[list(splits)[k] for k in m.argmax(0)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/validate06.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Complete mixed cubic basis → shared polynomial driver and three relaxation modes; preliminary 56/16 MAEs are 0.00471 endpoint and 0.00326 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Greedily select individual transformed cubic terms\",\"rejected_reason\":\"Ten selected terms still yielded 0.07196 endpoint MAE, well above the complete cubic fit.\"}],\"rationale\":\"Compare two and three relaxation modes on unseen rows and test whether the endpoint identifies a common polynomial driver that improves trajectory prediction. Include radial holdouts to expose extrapolation failures and verify the actual solver against the validation predictions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "82c40143d6fa577a34d492fe6f76b0f34604332a580c7dc9d828c78abf3185dd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33331.68,
+      "usage_known": true,
+      "prompt_tokens": 36649,
+      "cached_tokens": 9344,
+      "completion_tokens": 1148
+    }
+  ]
+}

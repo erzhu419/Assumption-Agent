@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aed0996c489e46d29c33f13ea9ad7f70",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Fixed_TwoStage_Modular_Online__dev_m101_c01_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:03:29.894026+00:00",
+  "ended_at_utc": "2026-11-28T08:04:09.399278+00:00",
+  "request_sha256": "762adcfa8f321f34f05220ef416662098c284e47d82030990eeb3cdafdfd74a1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55112,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33251,
+    "cached_tokens": 9344,
+    "completion_tokens": 1622
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/gp_batch.py <<'PY'\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.optimize import minimize\\nfrom scipy.spatial.distance import cdist\\nfrom itertools import combinations_with_replacement\\n\\ndef polys(x,k):\\n return np.column_stack([np.prod(x[:,j],axis=1) for j in combinations_with_replacement(range(4),k)])\\n\\ndef gp(x,y,q,kind):\\n xq=np.r_[x,q]; n=len(x); xq=xq/.7\\n y=np.asarray(y); y=y[:,None] if y.ndim==1 else y\\n y0=y.mean(0); sy=np.maximum(y.std(0),1e-8); ymm=(y-y0)/sy\\n Q=[polys(xq,k) for k in range(1,5)]; W=[p@p.T for p in Q]; D=(xq[:,None,:]-xq[None,:,:])**2; Dtr=D[:n,:n]; eye=np.eye(n)\\n trW=[w[:n,:n] for w in W]; const=np.ones((len(xq),len(xq)))\\n if kind=='poly': init=[-.3,-2,-4,-6,-8]; bound=[(-9,2)]*4+[(-13,-3)]\\n else: init=[-.3,-2,-3,0,0,0,0,-8]; bound=[(-9,2)]*3+[(-1.8,2)]*4+[(-13,-3)]\\n def matrices(p,train):\\n  a=np.exp(p); w=trW if train else W; c=const[:n,:n] if train else const[n:,:n]; w=w if train else [b[n:,:n] for b in w]\\n  if kind=='poly':\\n   gg=[a[i]*w[i] for i in range(4)]; k=c+sum(gg)\\n  else:\\n   delta=Dtr if train else D[n:,:n]; dt=delta*a[3:7]; dist=dt.sum(-1); g=np.exp(-.5*dist)\\n   if kind=='rq': g=(1+.5*dist)**-1\\n   a0,a1,a2=a[:3]; k=c+a0*w[0]+a1*w[1]+a2*g; gg=[a0*w[0],a1*w[1],a2*g]; gg.extend(np.moveaxis(-.5*a2*g[:,:,None]*dt*(g[:,:,None] if kind=='rq' else 1),2,0))\\n  if train: k=k+a[-1]*eye; gg.append(a[-1]*eye)\\n  return k,gg\\n def loss(p):\\n  k,g=matrices(p,True); fac=cho_factor(k,lower=True,check_finite=False); c=cho_solve(fac,ymm,check_finite=False); inv=cho_solve(fac,eye,check_finite=False); J=y.shape[1]*inv-c@c.T\\n  prior=np.zeros(len(p)); prior[3:7]=.10 if kind!='poly' else 0\\n  return .5*np.sum(c*ymm)+y.shape[1]*np.log(np.diag(fac[0])).sum()+np.sum(prior*p*p), .5*np.einsum('ij,kij->k',J,g)+2*prior*p\\n fit=minimize(loss,init,jac=True,method='L-BFGS-B',bounds=bound,options={'maxiter':160,'ftol':1e-10}); k,_=matrices(fit.x,True); cross,_=matrices(fit.x,False)\\n return y0+sy*(cross@cho_solve(cho_factor(k,lower=True),ymm)),fit.x\\n\\nif __name__=='__main__':\\n import pickle\\n s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; d=s['train']; x,y,z=d['x'],d['y'],d['traj']; n=len(x)\\n folds=[np.arange(56,72),*np.array_split(np.random.default_rng(22).permutation(n),5), np.argsort(np.linalg.norm(x,axis=1))[-14:]]\\n for kind in ['poly','rbf','rq']:\\n  vals=[]\\n  for j in folds:\\n   i=np.setdiff1d(np.arange(n),j); V=np.linalg.svd(z[i],full_matrices=False)[2][:2]; a=z[i]@V.T\\n   yy,yp=gp(x[i],y[i],x[j],kind); aa,ap=gp(x[i],a,x[j],kind); ac=np.c_[*[gp(x[i],col,x[j],kind)[0][:,0] for col in a.T]]\\n   vals.append([abs(yy[:,0]-y[j]).mean(),abs(aa@V-z[j]).mean(),abs(ac@V-z[j]).mean()]);\\n   if len(vals)==1:print(kind,'parameters',yp.round(2),ap.round(2))\\n  print(kind,np.round(vals,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/gp_batch.py; ls -l /tmp/hegel_continual_archive; OPENBLAS_NUM_THREADS=1 python3 /tmp/explore_batch.py | grep -E 'saturating|decay_|rank2|temporal right|both_damped'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (single compact projection or rational readout) -> H2 (regularized multivariate smoothness with rank-two trajectories); the best prior smooth models had separate worst-fold MAEs of 0.0482 for y and 0.01068 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote a compact rational model based on its ordered holdout\",\"rejected_reason\":\"Its scalar MAE rose above 0.05 on multiple shuffled folds, and trajectory variants did not beat the smooth control.\"}],\"rationale\":\"Fit kernel smoothness inside each fold and check whether separate trajectory-mode fits help. A high-radius holdout will expose extrapolation failures that random splits can miss and determine which models are suitable for the solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "0aea3eb962903e0ff0fb73ad6de76e3ded873477ab51ae6e0eb84ce70c87f50b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41968.38,
+      "usage_known": true,
+      "prompt_tokens": 33251,
+      "cached_tokens": 9344,
+      "completion_tokens": 1622
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bbed01071e444c1b903541cf6d3ac557",
+  "call_seq": 2,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c01_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:58:33.570675+00:00",
+  "ended_at_utc": "2026-11-28T07:58:56.209345+00:00",
+  "request_sha256": "284fa42991157e646b7ee2beb7d94d7d7b9839cca28d284e54eb3cfdb5374c6a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12815,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15184,
+    "cached_tokens": 9344,
+    "completion_tokens": 743
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/dev_m101_c01_batch_00_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust calibration panel alignment Cauchy IRLS' 2>&1 | head -25; python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.linalg import svdvals\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=150)\\nprint('times, telemetry, summary',s['eval_times'],s['telemetry_vec'],s['train']['summary'])\\nfor pn in ('panel_a','panel_b','panel_c'):\\n p=s[pn]; u=p['u']; A=np.c_[np.ones(len(u)),u]; print(pn,'x stats',u.min(0),u.max(0))\\n for k,v in p.items():\\n  if k=='u': continue\\n  w=np.linalg.lstsq(A,v,rcond=None)[0]; r=v-A@w; print(k,'coefs',w,'row residuals',np.sort(np.linalg.norm(r,axis=1)))\\nt=s['train']; x=t['x']; z=t['traj']; y=t['y']; print('ranges x/y/z',x.min(0),x.max(0),np.quantile(y,[0,.1,.5,.9,1]),z.min(0),z.max(0));print('x,y,traj sample',np.c_[x,y,z][:12]);print('centered trajectory sv',svdvals(z-z.mean(0)));print('raw trajectory sv',svdvals(z));print('linear y from traj MAE',np.mean(abs(np.c_[np.ones(72),z]@np.linalg.lstsq(np.c_[np.ones(72),z],y,rcond=None)[0]-y)));print('trajectory increment sv',svdvals(np.diff(z,axis=1)));print('test x ranges',s['test']['x'].min(0),s['test']['x'].max(0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: archived graph transfer → H2: identify the missing scalar readout or upstream nonlinearity; archived 56/16 MAE is 0.041965 for y and 0.009713 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived solver unchanged\",\n      \"rejected_reason\": \"It passed the schema check but failed the public scalar prediction gate.\"\n    }\n  ],\n  \"rationale\": \"Panel residuals will distinguish affine calibration from nonlinear operators or sparse outliers. Trajectory rank and the scalar readout fit will show whether to retain the archived dynamics and revise only the readout, or test a new upstream model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "85efeac656f30ea90dfa858dbc144e098915458b6ba80e9dbb30ab5e0906097c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22591.38,
+      "usage_known": true,
+      "prompt_tokens": 15184,
+      "cached_tokens": 9344,
+      "completion_tokens": 743
+    }
+  ]
+}

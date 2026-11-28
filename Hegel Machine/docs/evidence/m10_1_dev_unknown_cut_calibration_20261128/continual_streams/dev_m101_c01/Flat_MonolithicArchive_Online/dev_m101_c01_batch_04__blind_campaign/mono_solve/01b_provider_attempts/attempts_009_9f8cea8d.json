@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9f8cea8d62784ee5be0295c75bbf8b5e",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:09:49.535417+00:00",
+  "ended_at_utc": "2026-11-28T08:10:25.165358+00:00",
+  "request_sha256": "e13cd8f180c73c475f7826bedc9acbe753c7edf672d619b76217ecc80437e355",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52815,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33148,
+    "cached_tokens": 9344,
+    "completion_tokens": 1554
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/links.py <<'PY'\\nexec(open('/tmp/structure.py').read().split('for k in')[0])\\nfrom scipy.optimize import least_squares, minimize_scalar\\nfrom sklearn.model_selection import KFold\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\nF=[(np.arange(56),np.arange(56,72)),*KFold(5,shuffle=True,random_state=12).split(x)]\\nP=poly(x,2); X=poly(x,1); W=poly(x,3); B=x@cb[1:]+cb[0]; A=z@np.linalg.svd(z,full_matrices=False)[2][0]; Z=z[:,-1]\\nfor target in [A,y]:\\n print('target',target is y)\\n for p in [X,P]:\\n  for f,g,l,h in [(np.tanh,np.arctanh,np.max(abs(target))*1.0001,8),(np.sin,np.arcsin,np.max(abs(target))*1.0001,8),(np.sinh,np.arcsinh,.2,8),(lambda v:v/(1+abs(v)),lambda v:v/(1-abs(v)),np.max(abs(target))*1.0001,8)]:\\n   errs=[]; scales=[]; train=[]\\n   for i,j in F:\\n    def loss(a):\\n     if a<=np.max(abs(target[i])) and f is not np.sinh:return 1e3\\n     q=fit(p[i],g(target[i]/a)); return rm(a*f(p[i]@q)-target[i])\\n    lo=l if f is np.sinh else np.max(abs(target[i]))*1.0001\\n    a=minimize_scalar(loss,bounds=(lo,h),method='bounded').x; q=fit(p[i],g(target[i]/a)); errs.append(np.mean(abs(a*f(p[j]@q)-target[j]))); scales.append(a); train.append(loss(a))\\n   print(p.shape[1],f.__name__,np.round(errs,4),np.round(scales,2),np.round(train,4))\\n# Test whether state is a hidden readout regressor, scoring with measured state only as an oracle.\\ny0=[]; x0=[]\\nfor mode in ['p','z','zx','zxx','zcubic','zrational','zcross']:\\n a={'p':P,'z':np.c_[P,A],'zx':np.c_[P,A,X*A[:,None]],'zxx':np.c_[P,A,X*A[:,None],A*A], 'zcubic':np.c_[P,A,X*A[:,None],A*A,A**3], 'zrational':np.c_[P,A/(1+A*A),A*A/(1+A*A)],'zcross':np.c_[P,A,A[:,None]*P,A*A]}[mode]\\n print('oracle',mode,[(round(rm(a[i]@fit(a[i],y[i])-y[i]),4),round(np.mean(abs(a[j]@fit(a[i],y[i])-y[j])),4)) for i,j in F])\\n# Kernel family including dot-product gates and low-interaction subsets.\\nbase=P@P.T; v=(x[:,None,:]-x[None,:,:])**2; V=v.sum(2); ar=X@X.T\\nkernels={}\\nfor l in [.65,.9,1.2,1.5,2.]:\\n for k in [1,2,3,4]:\\n  E=np.exp(-v/(2*l*l)); a=poly(np.zeros((1,4)),1)\\n  kernels[l,k]=sum(np.prod(E[:,:,ix],axis=2) for ix in itertools.combinations(range(4),k))\\nfor l in [.5,.75,1.,1.4,2.]:\\n kernels[l,'M']= (1+np.sqrt(5*V)/l+5*V/(3*l*l))*np.exp(-np.sqrt(5*V)/l)\\nfor vec in [x,B,(x-bias)/scale,((x-bias)/scale)@cb[1:]+cb[0]]:\\n for l in [.6,1.,1.5,2.]:\\n  S=np.exp(-cdist(vec,vec,'sqeuclidean')/(2*l*l)); kernels[l,'mult',len(kernels)]=S*ar\\nfor b in [y,z]:\\n out=[]\\n for key,k in kernels.items():\\n  for a in [.05,1,10]:\\n   for n in [.00003,.0005,.005]:\\n    K=base+a*k; E=[]\\n    for i,j in F:\\n     pred=K[j[:,None],i]@solve(K[i[:,None],i]+n*np.eye(len(i)),b[i],assume_a='pos'); E.append(np.mean(abs(pred-b[j])))\\n    out.append((np.mean(E)+.4*max(E),key,a,n,np.round(E,5)))\\n print('top',b is y,*sorted(out,key=lambda v:v[0])[:12],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/links.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 compact rational readout → H2 shared state link or low-order interaction kernel; five-fold worst MAE is 0.04117 for readout and 0.00662 for the leading state mode in trajectory units.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"A quadratic numerator divided by one affine-square denominator is sufficient for the scalar readout.\",\"empirical_witness\":\"The quotient reached 0.05349 MAE on the 56/16 split and 0.07283 on its worst five-fold slice, versus 0.02612 and 0.04117 for the raw-input kernel.\",\"causal_blanket_diagnosis\":\"A single affine-square denominator did not capture the readout variation left after the quadratic trend.\",\"sublated_pivot\":\"Test saturating state laws, the predictive ceiling of a state-linked readout, and kernels grouped by interaction order.\",\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the worst residuals to delete training rows\",\"rejected_reason\":\"Large model residuals alone do not show measurement corruption.\"}],\"rationale\":\"A state-link oracle will determine whether building a stacked predictor is worthwhile; interaction kernels provide a testable alternative if the oracle adds little or fails across folds.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "2016e147ce6d39ac8d15ec755ccdb8c330b625fd124865f7ac8acd4e6ecda33b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40638.36,
+      "usage_known": true,
+      "prompt_tokens": 33148,
+      "cached_tokens": 9344,
+      "completion_tokens": 1554
+    }
+  ]
+}

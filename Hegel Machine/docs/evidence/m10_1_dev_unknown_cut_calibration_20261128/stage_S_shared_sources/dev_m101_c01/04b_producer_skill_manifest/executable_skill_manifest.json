@@ -1,0 +1,140 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_m101_c01_batch_00_65cbbdeafdd4",
+    "source_hash": "65cbbdeafdd4e4ce827993a13a639aa49a37ed743b73697f3c0c60aa843d0872",
+    "parent_ids": [],
+    "source_episode_id": "dev_m101_c01",
+    "task_id": "dev_m101_c01_batch_00__blind_campaign",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/model_cv.py",
+        "archived_relpath": "producers/tmp__model_cv.py",
+        "bytes": 3064,
+        "sha256": "f7935cd2ac7f14af44724367f149195a82d2ebd86c9c05d14f218332ab70b298"
+      },
+      {
+        "container_path": "/tmp/panel_cv.py",
+        "archived_relpath": "producers/tmp__panel_cv.py",
+        "bytes": 2844,
+        "sha256": "0e78f2cba4659c8fb9c44ee2e18f57bea6130a4047f57095725e5a2cf483b029"
+      },
+      {
+        "container_path": "/tmp/probe_c.py",
+        "archived_relpath": "producers/tmp__probe_c.py",
+        "bytes": 2143,
+        "sha256": "d2ab00d292604cb8d09a6358683e31b7ca481cfbf73b4726ec02f9bdcad4075a"
+      },
+      {
+        "container_path": "/tmp/probe_graph.py",
+        "archived_relpath": "producers/tmp__probe_graph.py",
+        "bytes": 3183,
+        "sha256": "211389112f3ace573ddd8a6fd06a59cf44510348690d3713c24e0055d910249c"
+      },
+      {
+        "container_path": "/tmp/probe_latent.py",
+        "archived_relpath": "producers/tmp__probe_latent.py",
+        "bytes": 2499,
+        "sha256": "8b85e414e88f53aff22cc051f986e7e5a6238bc6390309c8c65c349a1e588ca8"
+      },
+      {
+        "container_path": "/tmp/probe_links.py",
+        "archived_relpath": "producers/tmp__probe_links.py",
+        "bytes": 4240,
+        "sha256": "e513c7c0005b2e11723d9d5688ddba2e0581de91f07c9296f6d9fa4b976f9118"
+      },
+      {
+        "container_path": "/tmp/scalar_nested.py",
+        "archived_relpath": "producers/tmp__scalar_nested.py",
+        "bytes": 2199,
+        "sha256": "d6eaeb24af43c1612c8ceef98de292826f467907814a85e4569e67f628682d9d"
+      },
+      {
+        "container_path": "/tmp/verify_batch.py",
+        "archived_relpath": "producers/tmp__verify_batch.py",
+        "bytes": 1037,
+        "sha256": "21738176206da0d7a7b7c804f92405858af24f18a1591ab4c300089d403f67a3"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']\nnp.set_printoptions(precision=8,suppress=True,linewidth=160)\nfor k,v in s.items():\n print('\\n',k)\n for a,b in (v.items() if isinstance(v,dict) else [(k,v)]):\n  b=np.asarray(b);print(a,b.shape,b[:5] if b.ndim and len(b)>8 else b)\n  if b.ndim==2:print('mean/std',b.mean(0),b.std(0),'sv',np.linalg.svd(b-b.mean(0),compute_uv=False))\nt=s['train'];print('y quantiles',np.quantile(t['y'],[0,.1,.5,.9,1]));print('trajectory differ",
+      "cd /holdout_task && cat validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations_with_replacement as cr\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study'];np.set_printoptions(precision=4,suppress=True,linewidth=145)\ndef design(x,d):return np.column_stack([np.ones(len(x))]+[np.prod(x[:,i],axis=1) for k in range(1,d+1) for i in cr(range(4),k)])\nfor name in ['panel_a','panel_b','panel_c']:\n p=s[name];x=p['u'];print(name,'u range',x.min(0),x.max(0))\n for key,y in p.items():\n  if key=='u':continue\n  for d in (1,2):\n   a=design(x,d); m=np.linal",
+      "cd /holdout_task && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust affine reference panel alignment sparse outliers' ; cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations_with_replacement as cr\nfrom scipy.optimize import minimize, minimize_scalar\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study'];np.set_printoptions(precision=5,suppress=True,linewidth=120)\ndef a(x):return np.c_[np.ones(len(x)),x]\ndef poly(x,d):return np.column_stack([np.ones(len(x))]+[np.prod(x[:,i],axis=1) for k in range(1,d+1) for i",
+      "cd /holdout_task && cat > /tmp/probe_c.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nfrom itertools import combinations_with_replacement\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']\ndef aff(x):return np.column_stack((np.ones(len(x)),x))\ndef fit(a,y,loo=False):\n p=np.linalg.pinv(a);w=p@y;r=a@w-y\n if loo:r=r/(1-np.sum(a*p.T,axis=1)[:,None])\n return r,w\np=s['panel_c'];u=p['u'];\nfuns={'atan':lambda x,q:np.arctan(q*x),'softsign2':lambda x,q:x/np.sqrt(1+q*x*x),'rat':lambda x,q:x/(1+q*x*x),'tanh':lambda x,q:np.tanh(q*x),'asinh':lambda x,q:np.arcsinh(q*x),'er",
+      "cd /holdout_task && cat > /tmp/probe_graph.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.special import erf\nfrom itertools import combinations_with_replacement as cr\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']\ndef aff(x):return np.c_[np.ones(len(x)),x]\ndef poly(x,d):return np.c_[aff(x),*[np.prod(x[:,i],axis=1) for k in range(2,d+1) for i in cr(range(x.shape[1]),k)]] if d>1 else aff(x)\ndef fit(a,y):return np.linalg.lstsq(a,y,rcond=None)[0]\ndef loo(a,y):\n p=np.linalg.pinv(a);return (a@(p@y)-y)/np.maximum(1-np.sum(a*p.T,axis=1)[:,None],1e-8)\n",
+      "cat > /tmp/probe_latent.py <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations_with_replacement as cr\nfrom scipy.optimize import least_squares\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];t=s['train'];x=t['x'];Y=np.c_[t['y'],t['traj']];T=s['eval_times'];np.set_printoptions(precision=4,suppress=True,linewidth=140)\ndef aff(x):return np.c_[np.ones(len(x)),x]\ndef fit(X,y):return np.linalg.lstsq(X,y,rcond=None)[0]\ndef pol(x,d):return np.c_[aff(x),*[np.prod(x[:,i],1) for k in range(2,d+1) for i in cr(range(4),k)]]\nE=np.c_[-np.expm1(-1.52*T),-np.expm1(-.22*T)",
+      "cat > /tmp/model_cv.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.linalg import solve\nfrom scipy.spatial.distance import cdist\nfrom itertools import combinations_with_replacement as cr\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; t=s['eval_times']; Y=np.c_[y,z]\nE=np.c_[-np.expm1(-1.52*t),-np.expm1(-.22*t)]; P=E@np.linalg.pinv(E)\ndef aff(x):return np.c_[np.ones(len(x)),x]\ndef terms(x,k):return np.column_stack([np.prod(x[:,q],axis=1) for q in cr(range(4),k)])\nF=np.c_[aff(x),terms(x,2)];G=np.c_[F,terms(",
+      "cat > /tmp/probe_links.py <<'PY'\nimport pickle\nimport numpy as np\nfrom itertools import combinations_with_replacement as cr\nfrom scipy.optimize import least_squares\nfrom scipy.spatial.distance import cdist\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; t=s['eval_times']\ndef aff(x):return np.c_[np.ones(len(x)),x]\ndef poly(x,d=2):return np.c_[aff(x),*[np.prod(x[:,q],axis=1) for k in range(2,d+1) for q in cr(range(4),k)]]\ndef fit(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\npa=s['panel_a']; a=aff(pa['u']); v=pa",
+      "cat > /holdout_task/batch_solver.py <<'PY'\nfrom itertools import combinations_with_replacement\n\nimport numpy as np\nfrom scipy.linalg import solve\nfrom scipy.optimize import least_squares\nfrom scipy.spatial.distance import cdist\n\n\ndef _quadratic(x):\n    return np.column_stack((np.ones(len(x)), x, *(\n        x[:, i] * x[:, j] for i, j in combinations_with_replacement(range(x.shape[1]), 2)\n    )))\n\n\ndef _temporal_basis(times, trajectories):\n    def basis(rates):\n        return -np.expm1(-times[:, None] * rates)\n\n    def residual(rates):\n        u = basis(rates)\n        coefficients = np.linalg.ls",
+      "cat > /tmp/panel_cv.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.linalg import solve\nfrom scipy.spatial.distance import cdist\nfrom scipy.optimize import least_squares, minimize_scalar\nfrom itertools import combinations_with_replacement\nfrom importlib.util import spec_from_file_location,module_from_spec\nspec=spec_from_file_location('m','/holdout_task/batch_solver.py');m=module_from_spec(spec);spec.loader.exec_module(m)\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];x=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; t=s['eval_times']; n=len(x); ids=np.ar",
+      "cat > /tmp/scalar_nested.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.linalg import solve\nfrom scipy.spatial.distance import cdist\nfrom importlib.util import spec_from_file_location,module_from_spec\nspec=spec_from_file_location('solver','/holdout_task/batch_solver.py');m=module_from_spec(spec);spec.loader.exec_module(m)\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];x=s['train']['x'];y=s['train']['y'];a=np.arange(len(x));r=np.sum(x*x,1)\npa=s['panel_a']; u,v=pa['u'],pa['v']; idx=np.arange(len(u))\nfor _ in range(5):\n uc=u[idx]-u[idx].mean(0); scale=(uc*(v[idx]-v["
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__probe_links.py",
+      "primary_producer_container_path": "/tmp/probe_links.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 1922,
+        "sha256": "f7f0fe50f48cb0d23f293ff53ea16a0fb808b4ac2e11ee8db9b849a3de836b15",
+        "content_addressed_ref": "content_addressed_blobs/f7f0fe50f48cb0d23f293ff53ea16a0fb808b4ac2e11ee8db9b849a3de836b15.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "65cbbdeafdd4e4ce827993a13a639aa49a37ed743b73697f3c0c60aa843d0872",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cat > /tmp/scalar_nested.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.linalg import solve\nfrom scipy.spatial.distance import cdist\nfrom importlib.util import spec_from_file_location,module_from_spec\nspec=spec_from_file_location('so",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "65cbbdeafdd4e4ce827993a13a639aa49a37ed743b73697f3c0c60aa843d0872",
+        "expected_candidate_sha256": "65cbbdeafdd4e4ce827993a13a639aa49a37ed743b73697f3c0c60aa843d0872",
+        "computed_candidate_sha256": "65cbbdeafdd4e4ce827993a13a639aa49a37ed743b73697f3c0c60aa843d0872",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 1922
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_65cbbdea"
+    }
+  },
+  "structure": {
+    "full_producer_count": 8,
+    "reusable_ast_function_closures": []
+  }
+}

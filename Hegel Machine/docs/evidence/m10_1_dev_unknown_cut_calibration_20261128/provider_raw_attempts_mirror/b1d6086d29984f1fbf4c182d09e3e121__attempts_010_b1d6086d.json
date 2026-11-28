@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b1d6086d29984f1fbf4c182d09e3e121",
+  "call_seq": 10,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Fixed_TwoStage_Modular_Online__dev_m101_c03_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:26:43.396584+00:00",
+  "ended_at_utc": "2026-11-28T08:27:03.653953+00:00",
+  "request_sha256": "ceab40ea5f2a5cb732f31a1c33271db8725d7beaf3018c9d738806a4f1ba6749",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 64306,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34820,
+    "cached_tokens": 9344,
+    "completion_tokens": 725
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('dag_node', path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod.run_node\\n\\nnode = load('/holdout_task/node_00.py')\\nsink = load('/holdout_task/_frozen_nodes/node_01.py')\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\ntrain = study['train']\\nx, y, traj = (train[k] for k in ('x', 'y', 'traj'))\\nall_rows = np.arange(len(x))\\nfolds = [(f'block_{k}', rows) for k, rows in enumerate(np.array_split(all_rows, 4))]\\nfolds.append(('largest_observed_norm', np.argsort(np.linalg.norm(x, axis=1))[-12:]))\\nfor name, test in folds:\\n    fit = np.setdiff1d(all_rows, test)\\n    local = {**study, 'train': {'x': x[fit], 'y': y[fit], 'traj': traj[fit]}, 'test': {'x': x[test]}}\\n    prediction = sink({'node_00': node({'__input__': local})})\\n    y_mae = np.mean(np.abs(prediction['y_hat'] - y[test]))\\n    by_time = np.mean(np.abs(prediction['state_pred'] - traj[test]), axis=0)\\n    print(f'{name}: y={y_mae:.6f} traj={by_time.mean():.6f} worst_time={by_time.max():.6f}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 one direct interaction -> H2 cyclic cubics plus calibrated C v1 × v2 products; the clean official test accepted with y MAE 0.013223 and trajectory MAE 0.011943.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the official acceptance test\",\n      \"rejected_reason\": \"The saved artifact already passed in a clean process; rerunning the same split would not test sensitivity to extrapolation.\"\n    }\n  ],\n  \"rationale\": \"Test whether acceptance depends on the official split by holding out contiguous blocks and the largest observed inputs. A large error on those inputs would identify extrapolation as the remaining bottleneck and justify testing a smaller interaction basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b8980e7373646868742d8620af36e53d3bf7f9fe5409dd23b9d4cceef7cf693f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22831.24,
+      "usage_known": true,
+      "prompt_tokens": 34820,
+      "cached_tokens": 9344,
+      "completion_tokens": 725
+    }
+  ]
+}

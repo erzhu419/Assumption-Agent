@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a620f22c6a6d420bacf1e8b92d4d2100",
+  "call_seq": 11,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Flat_MonolithicArchive_Online__dev_m101_c02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:30:00.444344+00:00",
+  "ended_at_utc": "2026-11-28T08:30:35.876959+00:00",
+  "request_sha256": "a0866aad59f4a4de1633cafa601a19ed651decfbcaedfc78e68a14126c9de080",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71005,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38671,
+    "cached_tokens": 9344,
+    "completion_tokens": 1362
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\ns = p.read_text()\\ns = s.replace('def _fit(study, weight=.7, starts=None):', 'def _fit(study):\\\\n    weight = .5')\\ns = s.replace('return np.column_stack((np.ones(len(h)), h, np.arctan(h)))', 'return np.column_stack((np.ones(len(h)), h + np.arctan(h)))')\\na = s.index('    if starts is None:')\\nb = s.index('    params = opt.x', a)\\ns = s[:a] + '''    # Initialize in the four-harmonic basin identified from panel B alone.\\n    start = np.array([7.59, 2.355, -.09492, .00312, 9.631, .000627,\\n                      13.545, -.00005, 21.5, .00966, 5.90])\\n    z, _ = coordinates(start, w)\\n    ini = _ls(scalar(z), y)\\n    n = (len(start)-3)//2\\n    lo = np.r_[[.01, .7, -2], [-.25, 2]*n, [-100]*6, [.01, .01]]\\n    hi = np.r_[[30, 4, 2], [.25, 34]*n, [100]*6, [10, 10]]\\n    fits = [least_squares(profile, np.r_[start, scale*ini, 1.4, .7],\\n                          bounds=(lo, hi), max_nfev=220)\\n            for scale in (.7, 1.5)]\\n    opt = min(fits, key=lambda fit: fit.cost)\\n''' + s[b:]\\np.write_text(s)\\nPY\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\nd = s['train']\\nx, y, T = (d[k] for k in ('x', 'y', 'traj'))\\nrng = np.random.default_rng(53)\\nfolds = [('ordered', np.arange(72)), *[(f'shuffle-{i}', rng.permutation(72)) for i in range(4)],\\n         ('input-tail', np.argsort(np.max(abs(x-np.median(x, axis=0)), axis=1))),\\n         ('response-tail', np.argsort(abs(y-np.median(y))))]\\ndef checked(study):\\n    out = solve_batch(study)\\n    yp, tp, diag = (out[k] for k in ('y_hat', 'state_pred', 'diagnostics_vec'))\\n    n = len(study['test']['x'])\\n    assert yp.shape == (n,) and tp.shape == (n, len(study['eval_times'])) and diag.shape == (4,)\\n    assert all(np.isfinite(v).all() for v in (yp, tp, diag))\\n    np.testing.assert_allclose(diag, [yp.mean(), yp.std(), tp[:, -1].mean(), tp[:, -1].std()], rtol=0, atol=0)\\n    return yp, tp\\nchecked(s)\\nmetrics = []\\nfor name, idx in folds:\\n    i, j = idx[:56], idx[56:]\\n    yp, tp = checked(dict(s, train={**d, **{k: d[k][i] for k in ('x', 'y', 'traj')}}, test={'x': x[j]}))\\n    e = abs(tp-T[j]); m = (np.mean(abs(yp-y[j])), e.mean(), e.mean(axis=0).max())\\n    metrics.append(m)\\n    print(name, 'scalar / trajectory / worst horizon MAE', *[f'{v:.6f}' for v in m])\\nworst = np.max(metrics, axis=0)\\nprint('worst', worst)\\nassert np.all(worst < [.0060, .0050, .0066]), worst\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: independently weighted scalar link with four harmonics -> H2: shared linear–arctangent coefficient; the selected candidate's worst seven-slice MAEs are 0.005671 scalar and 0.004873 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the constrained high-frequency basin\",\n      \"rejected_reason\": \"It trades a small trajectory improvement for a larger worst-slice scalar error and slightly higher ordered-split MAE on both outputs.\"\n    }\n  ],\n  \"rationale\": \"Promote the constrained fit, which substantially reduces scalar tail error with little change to trajectory error. Run the required validator and rerun the established stress slices against the exact delivered entry point in an isolated Python process; a regression would block submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "bdb8b0104904cb1eb07f11bed0ee28914ab815e4be023b65c65706a1cd4da2f3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37967.14,
+      "usage_known": true,
+      "prompt_tokens": 38671,
+      "cached_tokens": 9344,
+      "completion_tokens": 1362
+    }
+  ]
+}

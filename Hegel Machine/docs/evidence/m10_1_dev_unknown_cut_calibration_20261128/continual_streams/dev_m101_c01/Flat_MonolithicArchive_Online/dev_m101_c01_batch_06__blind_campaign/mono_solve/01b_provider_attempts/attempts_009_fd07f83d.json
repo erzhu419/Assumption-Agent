@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fd07f83da4bd4513ae469ead2ae9091f",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:25:14.792168+00:00",
+  "ended_at_utc": "2026-11-28T08:25:50.177366+00:00",
+  "request_sha256": "b2f8c465f21372f5815a47e002a5a73f338038d7d482d99e84e3bce5e792a3d8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52538,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32449,
+    "cached_tokens": 9344,
+    "completion_tokens": 1544
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/links.py <<'PY'\\nexec(open('/tmp/explore.py').read().split('a=s[')[0])\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.special import expit\\np=s['panel_a']; g=np.linalg.norm(p['v']-p['u'],axis=1)<2; A=ls(poly(p['u'][g],1),p['v'][g]); X=(x-A[0])@np.linalg.inv(A[1:]); P=poly(X,2); R=poly(X,1)\\nU,S,V=np.linalg.svd(z,full_matrices=False); Y=np.c_[y,U[:,0]*S[0],U[:,1]*S[1]]; Q=-np.expm1(-t[:,None]*np.array([1.6,.2])); print('SVD',V[:2],S[:3]); print('time basis residual',np.std(z-ls(Q,z.T).T@Q.T), 'projection vals',ls(Q,V[:2].T));\\nrng=np.random.default_rng(129); folds=[np.arange(56,72)]+np.array_split(rng.permutation(n),5)+np.array_split(rng.permutation(n),5)\\nfor j in range(2):\\n out=Y[:,j]; q=ls(P,out); print('output',j,'poly/lin predictions','curve corr',np.corrcoef(np.c_[out-P@q,(P@q)**3, np.tanh(P@q), z[:,-1], (z[:,-1])**2].T)[0]);\\n def predict(nm,it,iv):\\n  T=P[it]; yy=out[it]; coef=ls(T,yy); p0=coef\\n  if nm=='quad':return P[iv]@coef\\n  if nm.startswith('link'):\\n   if nm=='link_asinh':fun=lambda q,r:np.arcsinh(q*r)/r\\n   if nm=='link_tanh':fun=lambda q,r:np.tanh(q*r)/r\\n   if nm=='link_sin':fun=lambda q,r:np.sin(q*r)/r\\n   if nm=='link_rat':fun=lambda q,r:q/(1+r*r*q*q)\\n   fit=least_squares(lambda b:fun(T@b[:-1],b[-1])-yy,np.r_[coef,.1],bounds=(np.r_[np.full(T.shape[1],-np.inf),.001],np.r_[np.full(T.shape[1],np.inf),1.]),max_nfev=100)\\n   return fun(P[iv]@fit.x[:-1],fit.x[-1])\\n  def mats(ix,r):\\n   v=R[ix]@r\\n   if nm=='tanhridge':f=np.tanh(v)\\n   if nm=='sinridge':f=np.sin(v)\\n   if nm in ('ratridge','ratlinear','ratquad'):f=1/(1+v*v)\\n   if nm in ('tanhridge','sinridge','ratridge'):return np.c_[P[ix],f]\\n   if nm=='ratlinear': return np.c_[P[ix],f[:,None]*R[ix]]\\n   if nm=='ratquad': return np.c_[P[ix],f[:,None]*P[ix]]\\n  df=2 if nm=='ratquad' else 5\\n  starts=np.r_[np.eye(5),np.random.default_rng(1).normal(size=(df,5))*.5]; starts[0]=[.2,.4,.4,.4,.4]\\n  def residual(r):\\n   F=mats(it,r); c=ls(F,yy); return np.r_[F@c-yy,r*.002,c*.0005]\\n  fits=[least_squares(residual,r,max_nfev=70,bounds=(-5,5)) for r in starts]; fit=min(fits,key=lambda v:v.cost); F=mats(it,fit.x); c=ls(F,yy)\\n  if len(iv)==0: print('fit',nm,round(np.sqrt(2*fit.cost/len(it)),5),fit.x,c[-5:]);return []\\n  return mats(iv,fit.x)@c\\n for nm in ['quad','link_asinh','link_tanh','link_sin','link_rat','tanhridge','sinridge','ratridge','ratlinear','ratquad']:\\n  if not(nm.startswith('link') or nm=='quad'):predict(nm,np.arange(n),np.arange(0))\\n  E=[]\\n  for iv in folds:\\n   it=np.setdiff1d(np.arange(n),iv); E.append(np.mean(abs(predict(nm,it,iv)-out[iv])))\\n  print(nm,'56/16, mean, max',E[0],np.mean(E),np.max(E),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/links.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 dense rational features -> H2 compact nonlinear readout or ridge correction; screened worst-fold MAEs are 0.04135 for y and 0.03163 for state amplitude.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the best broad feature bank immediately\",\"rejected_reason\":\"Its modest improvement may reflect split selection; a compact readout could generalize better if the residual has one nonlinear direction.\"}],\"rationale\":\"Fit nonlinear links and ridge corrections within each fold to test whether the quadratic residual comes from a compact operator. Check the telemetry basis separately before committing to a trajectory model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "a7023d1bbcde91933315ea03657be97902f2d3b6a98517e233c5317c5917c817",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40514.24,
+      "usage_known": true,
+      "prompt_tokens": 32449,
+      "cached_tokens": 9344,
+      "completion_tokens": 1544
+    }
+  ]
+}

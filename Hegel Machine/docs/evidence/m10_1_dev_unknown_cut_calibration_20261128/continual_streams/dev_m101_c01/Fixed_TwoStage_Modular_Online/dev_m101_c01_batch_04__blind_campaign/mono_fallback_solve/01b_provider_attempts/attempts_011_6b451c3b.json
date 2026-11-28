@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6b451c3bf26a474890ee9826355bc1d9",
+  "call_seq": 11,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Fixed_TwoStage_Modular_Online__dev_m101_c01_batch_04__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:12:31.304421+00:00",
+  "ended_at_utc": "2026-11-28T08:13:15.146858+00:00",
+  "request_sha256": "0ffabe5b7bd6eb20b23ad904dc89c7c7e4679a5be5c640164a43e958f77b900a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66585,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38715,
+    "cached_tokens": 9344,
+    "completion_tokens": 1821
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\nfrom scipy.linalg import solve\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _least_squares(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _calibrate(panel, x):\\n    u, v = panel['u'], panel['v']\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(5):\\n        w = np.array([_least_squares(_affine(u[keep, j:j+1]), v[keep, j])\\n                      for j in range(u.shape[1])]).T\\n        residual = np.linalg.norm(w[0] + u * w[1] - v, axis=1)\\n        keep = residual < max(0.001, 4 * np.median(residual))\\n    return w[0] + x * w[1]\\n\\n\\ndef _even_operator(panel, x):\\n    u, v = panel['u'], panel['v2']\\n\\n    def design(q, k):\\n        return np.column_stack((_affine(q), np.sqrt(1 + k * q**2) - 1))\\n\\n    def residual(k):\\n        h = design(u, k)\\n        return (h @ _least_squares(h, v) - v).ravel()\\n\\n    k = least_squares(residual, [0.2], bounds=(0.001, 8)).x\\n    return design(x, k) @ _least_squares(design(u, k), v)\\n\\n\\ndef _kernel_inputs(study, x):\\n    panel = study['panel_b']\\n    b = _least_squares(_affine(panel['u']), panel['v'])\\n    u = _affine(_calibrate(study['panel_a'], x)) @ b\\n    d = _even_operator(study['panel_c'], u)\\n    quadratic = np.column_stack([u[:, i] * u[:, j]\\n                                 for i, j in combinations_with_replacement(range(u.shape[1]), 2)])\\n    interactions = (u[:, :, None] * d[:, None, :]).reshape(len(u), -1)\\n    f = np.column_stack((_affine(u), quadratic, d, interactions))\\n    return f @ f.T, cdist(u, u, metric='sqeuclidean')\\n\\n\\ndef _predict(k, train, test, observed, ridge=0.03):\\n    gram = k[np.ix_(train, train)] + ridge**2 * np.eye(len(train))\\n    return k[np.ix_(test, train)] @ solve(gram, observed, assume_a='pos')\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x, q = train['x'], study['test']['x']\\n    i, j = np.arange(len(x)), np.arange(len(x), len(x) + len(q))\\n    base, distance = _kernel_inputs(study, np.vstack((x, q)))\\n    short = base + 0.3 * np.exp(-0.5 * distance)\\n    long = base + np.exp(-0.125 * distance)\\n    y_hat = _predict(short, i, j, train['y'])\\n    state_pred = (_predict(short, i, j, train['traj']) + _predict(long, i, j, train['traj'])) / 2\\n    final = state_pred[:, -1]\\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), final.mean(), final.std()])\\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': diagnostics}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat > /tmp/verify04.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f:s=pickle.load(f)[0]['study']\\nx=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; rng=np.random.default_rng(91)\\ncv=[(np.arange(56),np.arange(56,72))]+[(p[:56],p[56:]) for p in (rng.permutation(72) for _ in range(7))]\\nr=np.linalg.norm(x,axis=1); p=np.argsort(r); stress=[(p[:56],p[56:])]\\nbase,d=m._kernel_inputs(s,x); a=base+.3*np.exp(-.5*d); b=base+np.exp(-.125*d)\\nrows=[]\\nfor i,j in cv+stress:\\n ss={**s,'train':{**s['train'],'x':x[i],'y':y[i],'traj':z[i]},'test':{'x':x[j]}}\\n o=m.solve_batch(ss); p,q=o['y_hat'],o['state_pred']; end=q[:,-1]\\n assert np.allclose(o['diagnostics_vec'],[p.mean(),p.std(),end.mean(),end.std()])\\n v=np.linalg.svd(z[i],full_matrices=False)[2][0]; projected=(q@v)[:,None]*v\\n rows.append([abs(p-y[j]).mean(),abs(q-z[j]).mean(),abs(projected-z[j]).mean(),abs(end-z[j,-1]).mean(),abs(q-z[j]).mean(axis=0).max()])\\nrows=np.array(rows);print('y, trajectory, rank-one trajectory, final horizon, worst horizon'); print('56/16',rows[0]);print('8-fold mean',rows[:-1].mean(axis=0));print('8-fold worst',rows[:-1].max(axis=0));print('outer-radius split',rows[-1]);\\no=m.solve_batch(s);assert o['y_hat'].shape==(36,) and o['state_pred'].shape==(36,8) and o['diagnostics_vec'].shape==(4,) and all(np.all(np.isfinite(a)) for a in o.values())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify04.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (rational panel readout) -> H2 (calibrated panel features with kernel residuals); eight-split worst MAE for the short-kernel model is 0.03403 for y and 0.00938 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the rational scalar readout\",\n      \"rejected_reason\": \"Its worst-split MAE is 0.03981, versus 0.03403 for the calibrated kernel readout.\"\n    }\n  ],\n  \"rationale\": \"Save the better-validated scalar model and verify the trajectory blend on the same splits. The outer-radius split checks whether either readout degrades at the edge of training support; the rank-one comparison tests whether temporal denoising would improve the delivered trajectory.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "39a00306b3105fb3a6358b399a05f9f890670eca03d621d25b0efb60d1ca8996",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46284.2,
+      "usage_known": true,
+      "prompt_tokens": 38715,
+      "cached_tokens": 9344,
+      "completion_tokens": 1821
+    }
+  ]
+}

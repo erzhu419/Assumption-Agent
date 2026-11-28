@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4aa18b71ec4544e793bb03a03059c786",
+  "call_seq": 5,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Flat_MonolithicArchive_Online__dev_m101_c02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:07:14.374559+00:00",
+  "ended_at_utc": "2026-11-28T08:07:41.687024+00:00",
+  "request_sha256": "49a07b2ad7a273922dfd44c8be6df2cdef7a259e3ffb6a4552a0f28d6c972cbc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37718,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25032,
+    "cached_tokens": 9344,
+    "completion_tokens": 1009
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -i 's/np.c_\\\\[ix,y,f,h,e,z\\\\]/np.c_[np.arange(len(y)),y,f,h,e,z]/g' /tmp/explore02.py\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/explore02.py\\ncat > /tmp/readout02.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nexec(open('/tmp/explore02.py').read().split('p=least_squares')[0])\\nD=np.c_[A(z),z[:,0]*z[:,2]+z[:,1]*z[:,3]]\\nD2=np.c_[A(z),z[:,0]*z[:,2],z[:,1]*z[:,3]]\\nfor X in (D,D2):\\n for name,fn in [('atan',lambda h:np.c_[h*0+1,np.arctan(h)]),('tanh',lambda h:np.c_[h*0+1,np.tanh(h)]),('sin',lambda h:np.c_[h*0+1,np.sin(h)]),('atan+linear',lambda h:np.c_[h*0+1,np.arctan(h),h]),('tanh+linear',lambda h:np.c_[h*0+1,np.tanh(h),h]),('sin+linear',lambda h:np.c_[h*0+1,np.sin(h),h]),('sin+cos+linear',lambda h:np.c_[h*0+1,np.sin(h),np.cos(h),h]),('rational+linear',lambda h:np.c_[h*0+1,h/(1+h*h),h]),('sin+second',lambda h:np.c_[h*0+1,np.sin(h),np.sin(2*h)]),('tanh+atan',lambda h:np.c_[h*0+1,np.tanh(h),np.arctan(h)])]:\\n  vals=[]\\n  for vi in [va,np.random.default_rng(12).permutation(len(y))[:16],np.random.default_rng(21).permutation(len(y))[:16]]:\\n   ti=np.setdiff1d(np.arange(len(y)),vi); init=np.linalg.lstsq(X[ti],y[ti],rcond=None)[0]\\n   def calc(p,ii):\\n    B=fn(X@p); return B[ii]@np.linalg.lstsq(B[ti],y[ti],rcond=None)[0]\\n   opt=min([least_squares(lambda p:calc(p,ti)-y[ti],init*val,max_nfev=180) for val in (.35,.7,1.1,1.6)],key=lambda o:o.cost)\\n   vals.append((np.abs(calc(opt.x,ti)-y[ti]).mean(),np.abs(calc(opt.x,vi)-y[vi]).mean()))\\n  print(X.shape[1],name,np.array(vals).round(5).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout02.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unrestricted quadratic index) -> H2 (paired interactions in panel-B coordinates with a shared nonlinear readout); previous 56/16 scalar MAE was 0.01528, with maximum error 0.07038.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain all ten quadratic terms\",\n      \"rejected_reason\": \"Only the two paired interactions have substantial fitted coefficients in panel-B coordinates; testing the restricted index will show whether the others help on held-out rows.\"\n    }\n  ],\n  \"rationale\": \"Correct the residual display and compare compact readouts across three held-out splits. Test trajectory bases separately so scalar model selection cannot hide a trajectory regression.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "95968ae397555616511b8ddf6a26475d97f5e64d9a72ef966981269cbcdfb817",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29819.24,
+      "usage_known": true,
+      "prompt_tokens": 25032,
+      "cached_tokens": 9344,
+      "completion_tokens": 1009
+    }
+  ]
+}

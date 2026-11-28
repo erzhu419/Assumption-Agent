@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8a4645e697f74c56b964f5a42efc1472",
+  "call_seq": 5,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c04_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:00:56.336962+00:00",
+  "ended_at_utc": "2026-11-28T08:01:29.039695+00:00",
+  "request_sha256": "1fc25882f83b3888d440a245a16732d4bce5a840fb6cbddfd0d72b37cd15b17a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 43818,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28269,
+    "cached_tokens": 9344,
+    "completion_tokens": 1383
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'variable projection separable nonlinear least squares ridge profiling' 2>&1 | head -25\\ncat > /tmp/link_scan.py <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];z=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']({'__input__':s})['z_tr'];y=s['train']['y'];a,b,c,d=z.T\\nL=np.c_[np.ones(len(z)),z];I=np.c_[a*c,b*d];pairs=np.c_[a*a,a*b,a*c,a*d,b*b,b*c,b*d,c*c,c*d,d*d]; tri=np.c_[a*b*c,a*b*d,a*c*d,b*c*d]\\nlinks={'tanh':np.tanh,'atan':np.arctan,'erf':__import__('scipy.special',fromlist=['erf']).erf,'softsign':lambda x:x/(1+abs(x)),'root':lambda x:x/np.sqrt(1+x*x),'sin':np.sin,'rational-odd':lambda x:x/(1+x*x),'asinh':np.arcsinh,'cubic-saturation':lambda x:x/np.cbrt(1+abs(x)**3),'exp-saturation':lambda x:np.sign(x)*(-np.expm1(-abs(x)))}\\nsplits=[(np.r_[0:52],np.r_[52:72])];rng=np.random.default_rng(24)\\nfor _ in range(4):\\n ix=rng.permutation(72);splits.append((ix[20:],ix[:20]))\\nfor name,f in links.items():\\n for mode in ('independent','linked','interaction-in-index','quadratic','triple'):\\n  scores=[]\\n  for tr,te in splits:\\n   q0=np.linalg.lstsq(np.c_[L,I][tr],y[tr],rcond=None)[0]\\n   def predict(p):\\n    q=L@p[:5]\\n    if mode=='interaction-in-index':q=q+I@p[6:8];return q+p[5]*f(p[8]*q)\\n    return q+p[5]*f(p[6]*q)+I@p[7:9]\\n   if mode in ('linked','interaction-in-index'):\\n    starts=[np.r_[q0[:5]*k,m,1.7,q0[5:]] if mode=='linked' else np.r_[q0[:5]*k,m,q0[5:],1.7] for k,m in [(1,.3),(1,-.3),(.7,.6)]]\\n    opts=[least_squares(lambda p:(predict(p)-y)[tr],p,max_nfev=120) for p in starts];opt=min(opts,key=lambda x:x.cost);pred=predict(opt.x); pars=opt.x\\n   else:\\n    base=np.c_[L,I] if mode=='independent' else np.c_[L,pairs] if mode=='quadratic' else np.c_[L,I,tri]\\n    def solve(p):\\n     A=np.c_[base,f(L@p)]; w=np.linalg.lstsq(A[tr],y[tr],rcond=None)[0];return A@w,w\\n    opts=[least_squares(lambda p:(solve(p)[0]-y)[tr],q0[:5]*k,bounds=(-6,6),max_nfev=100) for k in (.6,1.4,2.)];opt=min(opts,key=lambda x:x.cost);pred,w=solve(opt.x);pars=np.r_[opt.x,w]\\n   e=pred-y;scores.append([np.sqrt(np.mean(e[tr]**2)),np.mean(abs(e[te])),np.max(abs(e[te]))]);\\n   if len(scores)==1: pfirst=pars\\n  scores=np.array(scores);print(name,mode,'train/public/worst/row',np.round([scores[0,0],scores[0,1],max(scores[:,1]),max(scores[:,2])],5),'params',np.round(pfirst,3),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/link_scan.py > /tmp/link_scan.log\\nawk '{print $5, $0}' /tmp/link_scan.log | sort -g | cut -d' ' -f2- | head -22\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Polynomial scalar law → nonlinear response along one calibrated coordinate projection plus paired interactions; the best prior public-split MAE is 0.02646, with trajectory horizon MAE at most 0.00515.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Deploy the first passing softsign fit\",\"rejected_reason\":\"Several link functions pass one split, so compare coefficient structure and held-out performance across additional splits before choosing the scalar law.\"}],\"rationale\":\"The fitted nonlinear projection nearly aligns with the affine scalar coefficients. Test whether they share one index, whether paired interactions belong inside or outside the link, and whether larger bases offer a reproducible improvement.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "da0cde3769682872a82896a4c7999ab0488d3e3a1e1ae278e7d20afd7032f016",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37668.42,
+      "usage_known": true,
+      "prompt_tokens": 28269,
+      "cached_tokens": 9344,
+      "completion_tokens": 1383
+    }
+  ]
+}

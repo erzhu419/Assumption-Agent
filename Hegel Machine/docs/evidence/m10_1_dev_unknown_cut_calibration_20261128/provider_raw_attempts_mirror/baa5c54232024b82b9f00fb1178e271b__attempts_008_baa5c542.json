@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "baa5c54232024b82b9f00fb1178e271b",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Fixed_TwoStage_Modular_Online__dev_m101_c04_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:22:16.381857+00:00",
+  "ended_at_utc": "2026-11-28T08:22:42.715735+00:00",
+  "request_sha256": "a7fed6128a9ce17c74d42036069ed4eaba2b30090a71fa4dc2348cdef53040ae",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 48330,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29191,
+    "cached_tokens": 0,
+    "completion_tokens": 1038
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/^vals=\\\\[\\\\]/,$d' /tmp/panel_c_probe.py > /tmp/search_handoff.py; cat >> /tmp/search_handoff.py <<'PY'\\nfrom itertools import product\\n\\ndef inverse(F,z,guess):\\n return np.array([least_squares(lambda v:F(v[None])[0]-r,g,max_nfev=80).x for r,g in zip(z,guess)])\\nfor key in ('v1','v2'):\\n f=C[key]; lin=ls(affine(p['u']),p[key]); C[key+'i']=lambda z,f=f,lin=lin:inverse(f,z,np.clip(np.linalg.solve(lin[1:].T,(z-lin[0]).T).T,-2,2))\\nF={**trans,**C}; tr=np.arange(52);te=np.arange(52,len(x)); scored=[]\\ndef score(n,z):\\n D=affine(z); e=D[te]@ls(D[tr],t[tr])-t[te]; err=np.mean(abs(e));scored.append((err,n,z));return err\\nfor n,f in F.items():\\n z=f(x); score(n,z)\\n for k,g in F.items():\\n  if k in ('raw',) or n=='raw':continue\\n  score(n+'>'+k,g(z))\\nfor _,n,z in sorted(scored,key=lambda q:q[0])[:16]: print('trajectory',_,n, 'range',np.max(abs(z)))\\nfor err,n,z in sorted(scored,key=lambda q:q[0])[:12]:\\n o=frozen['run_node']({'node_00':{'z_tr':z[tr],'z_te':z[te],'y':y[tr],'traj':t[tr]}});print('both',n,err,np.mean(abs(o['y_hat']-y[te])))\\nprint('sample rows',np.c_[x,Ai(x),Bi(Ai(x)),y,t[:,[0,3,7]]][:8].round(3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/search_handoff.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: single-map calibration -> ordered forward/inverse panel handoff; best measured single-fold trajectory MAE is 0.327241.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Expand the downstream feature array\",\"rejected_reason\":\"The frozen scalar model couples specific coordinate pairs, so a low trajectory error alone would not establish a compatible handoff.\"}],\"rationale\":\"Test reverse panel_c maps and both composition orders on the official split. A low trajectory error identifies the coordinate span; the scalar metric distinguishes coordinate conventions within that span.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ba2bdaccafacf482b65ad59fca9dac50c67cb15047997af825fdd6fb99b15952",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28885.62,
+      "usage_known": true,
+      "prompt_tokens": 29191,
+      "cached_tokens": 0,
+      "completion_tokens": 1038
+    }
+  ]
+}

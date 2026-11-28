@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9886e2f431474f0eaf586684a149b337",
+  "call_seq": 6,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Flat_MonolithicArchive_Online__dev_m101_c02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:33:34.330501+00:00",
+  "ended_at_utc": "2026-11-28T08:34:10.477253+00:00",
+  "request_sha256": "f2d49e807643f7f60716b14dc0cc4e2aa67708ee1e6c50029de801603851cf85",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46164,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27784,
+    "cached_tokens": 9344,
+    "completion_tokens": 1416
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1; cat > /tmp/operator06.py <<'PY'\\nfrom model06 import *\\nfrom scipy.optimize import minimize_scalar\\nfrom sklearn.model_selection import KFold\\nu,v=(s['panel_b'][k] for k in ('u','v')); tr=s['train']; w=calibration(s)(tr['x']); y=tr['y']; T=tr['traj']; t=s['eval_times']; folds=[(np.arange(56),np.arange(56,72)),*KFold(4,shuffle=True,random_state=4).split(w)]\\nsv=np.linalg.svd(T,full_matrices=False); print('times',t,'time mode',sv[2][0]);\\nfor name,tf in [('log',lambda p:np.log1p(p*t)),('exp',lambda p:-np.expm1(-p*t)),('rat',lambda p:t/(1+p*t)),('asinh',lambda p:np.arcsinh(p*t))]:\\n def r(p):\\n  f=tf(p); return np.sqrt(np.mean((T-(T@f/(f@f))[:,None]*f)**2))\\n m=minimize_scalar(r,bounds=(.001,15),method='bounded'); print('time',name,m.x,m.fun)\\ndef score(z):\\n a=aff(z); cross=z[:,0]*z[:,2]+z[:,1]*z[:,3]; sy=np.c_[a,cross]; both=[]\\n for i,j in folds:\\n  pred=sy[j]@ls(sy[i],y[i]); traj=a[j]@ls(a[i],T[i]); both.append([np.mean(abs(pred-y[j])),np.mean(abs(traj-T[j]))]);\\n return np.round(both,5)\\ndef report(name,f,init=None,bounds=None):\\n def resid(p,x,y):\\n  a=f(x,p); return (a@ls(a,y)-y).ravel()\\n def opt(x,y):\\n  if init is None:return None\\n  options=[least_squares(resid,p,args=(x,y),bounds=bounds,max_nfev=180) for p in init]; return min(options,key=lambda q:q.cost).x\\n p=opt(u,v); a=f(u,p); c=ls(a,v); e=np.sqrt(np.mean((a@c-v)**2));\\n loo=[]\\n for k in range(len(u)):\\n  i=np.arange(len(u))!=k; pp=opt(u[i],v[i]); loo.extend((f(u[k:k+1],pp)@ls(f(u[i],pp),v[i])-v[k]).ravel())\\n print(name,'params',p,'panel rms/loo',round(e,6),round(np.std(loo),6),'56/16 and worst',score(f(w,p)@c)[0],score(f(w,p)@c).max(0),flush=True)\\n if name=='diag cubic':print('diag cubic coefficient ratios',np.round(c[1:5]/c[9:13],3),'square coefficients',np.round(c[5:9],3));\\n if name.startswith('rational'): print('operator',np.round(c,4));\\nreport('diag cubic',lambda x,p:np.c_[aff(x),x**2,x**3]);\\nreport('odd cubic unrestricted',lambda x,p:np.c_[aff(x),x**3]);\\nreport('shared cubic',lambda x,p:aff(x**3+p[0]*x),[[0],[-.5]],([-8],[8]));\\nreport('rational fixed2',lambda x,p:aff(x**3/(1+p[0]*x*x)+p[1]*x),[[.2,0],[1,-.1],[3,-.3]],([0,-6],[15,6]));\\nreport('rational free power',lambda x,p:aff(x**3/(1+p[0]*abs(x)**p[1])+p[2]*x),[[.3,3,-.1],[1,2,-.2],[1,4,-.3]],([0,.5,-6],[15,9,6]));\\nreport('sine plus linear',lambda x,p:aff(np.sin(p[0]*x)+p[1]*x),[[1,-1],[3,-1],[6,0],[9,0]],([.1,-20],[15,20]));\\nreport('shared quintic',lambda x,p:aff(x**3+p[0]*x+p[1]*x**5),[[0,0],[-.3,-.3]],([-8,-8],[8,8]));\\nPY\\npython3 /tmp/operator06.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (generic polynomial operators) -> H2 (a shared nonlinear panel-B transform and near-rank-one time response); current 56/16 MAEs are 0.15706 for y and 0.10655 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select panel C v2 because its panel fit is most accurate\",\n      \"rejected_reason\": \"Its quadratic model has roughly 0.37 MAE on both downstream outputs, compared with 0.15706 and 0.10655 for the panel-B cubic fit.\"\n    }\n  ],\n  \"rationale\": \"The cyclic cubic calibration accounts for the clean panel-A rows to about 1e-4 RMS. Panel-B leave-one-row-out refits can now distinguish a shared rational, polynomial, or sinusoidal law from a flexible fit to 24 rows. Downstream splits and separate time-mode fits test whether better panel reconstruction improves prediction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "50e96734a783da0f64d4427c14017d8e2f02a0f3ab4617ad485844cf19eb33e6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38704.71,
+      "usage_known": true,
+      "prompt_tokens": 27784,
+      "cached_tokens": 9344,
+      "completion_tokens": 1416
+    }
+  ]
+}

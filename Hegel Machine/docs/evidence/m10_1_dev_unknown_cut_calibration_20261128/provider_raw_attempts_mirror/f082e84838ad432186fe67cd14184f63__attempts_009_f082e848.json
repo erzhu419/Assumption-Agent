@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f082e84838ad432186fe67cd14184f63",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c01_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:02:56.101273+00:00",
+  "ended_at_utc": "2026-11-28T08:03:29.939218+00:00",
+  "request_sha256": "c7960c930478017cf1b8c4605163fc06988026276bb252c94501d20914d9f470",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53678,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31914,
+    "cached_tokens": 9344,
+    "completion_tokens": 1466
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/ridgeprobe.py <<'PY'\\nfrom structure import *\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import qr,solve_triangular\\nrng=np.random.default_rng(829)\\nids=np.arange(72); order=np.argsort(np.linalg.norm(x,axis=1)); splits=[(ids[:56],ids[56:])]+[(i[:56],i[56:]) for i in [rng.permutation(ids) for _ in range(4)]]+[(order[:56],order[56:])]\\n\\ndef ridge(U,Y,ix,fn,d,depth=1,starts=14):\\n P=poly(U,d); ps=P[ix]; Q,R=qr(ps,mode='economic'); V=Y[ix]; RY=V-Q@(Q.T@V)\\n if fn=='sin': transform=lambda u:np.column_stack([np.sin(u),np.cos(u)])\\n if fn=='tanh': transform=np.tanh\\n if fn=='rat': transform=lambda u:u/(1+u*u)\\n if fn=='soft': transform=lambda u:u/np.sqrt(1+u*u)\\n dim=4 if fn=='sin' else 5\\n def enrich(T,p):return transform(T@p[:4]+(p[4] if dim==5 else 0)).reshape(len(T),-1)\\n def res(p,ret=False):\\n  F=np.column_stack([enrich(U,pp) for pp in p.reshape(-1,dim)]); QF=Q.T@F[ix]; M=F[ix]-Q@QF\\n  w=np.linalg.lstsq(M,RY,rcond=None)[0]\\n  if ret:return P@solve_triangular(R,Q.T@V-QF@w)+F@w\\n  return (M@w-RY).ravel()\\n local=np.random.default_rng(817)\\n axes=np.r_[np.eye(4),local.normal(size=(starts,4))*.85]; init=[np.r_[a0,0] if dim==5 else a0 for a0 in axes]\\n bds=([-3]*dim,[3]*dim)\\n p=[]\\n for k in range(depth):\\n  opts=[least_squares(res,np.r_[p,p0],bounds=(bds[0]*(k+1),bds[1]*(k+1)),max_nfev=65,ftol=3e-7) for p0 in init if np.max(abs(p0))<3]; best=min(opts,key=lambda o:o.cost);p=best.x\\n return res(p,True),p,np.mean(abs(best.fun))\\n\\nif __name__=='__main__':\\n print('raw quadratic coefficients',np.linalg.lstsq(poly(x[:56]),np.c_[y,z][0:56],rcond=None)[0][:,[0,1,8]].T)\\n for f in ('sin','tanh','rat','soft'):\\n  for d in (1,2):\\n   errs=[]\\n   for i,j in splits:\\n    p,k,e=ridge(xa,y,i,f,d); errs.append(np.mean(abs(p[j]-y[j])))\\n    if i[0]==0 and np.array_equal(i,ids[:56]): print('scalar',f,d,'params',np.round(k,3),'fit',round(e,5),'first',round(errs[-1],5))\\n   print('scalar CV',f,d,np.round(errs,5))\\n for f in ('sin','tanh','rat'):\\n  for dep in (1,2):\\n   errs=[]\\n   for i,j in splits:\\n    p,k,e=ridge(xa,y,i,f,2,dep,8); errs.append(np.mean(abs(p[j]-y[j])))\\n    if np.array_equal(i,ids[:56]): print('depth',f,dep,'params',np.round(k,3),'fit',round(e,5))\\n   print('depth CV',f,dep,np.round(errs,5))\\n for f in ('sin','tanh','rat'):\\n  epi=[]\\n  for i,j in splits:\\n   F=next(F for e,name,q,F in temporal(z[i]) if name=='step-wave'); c=np.linalg.lstsq(F,z.T,rcond=None)[0].T; Z=[]\\n   for l in range(2):\\n    p,k,e=ridge(xa,c[:,l],i,f,2,1,8);Z.append(p)\\n    if np.array_equal(i,ids[:56]): print('amp',l,f,'params',np.round(k,3),'fit',round(e,5))\\n   epi.append(np.mean(abs(np.array(Z).T[j]@F.T-z[j])))\\n  print('traj CV',f,np.round(epi,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ridgeprobe.py; cat /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: panel C feature kernels → H2: compact directional nonlinearities plus polynomial interactions; the best C-composition outer-shell MAE is 0.1350 for y, while trajectory MAE is 0.0156.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote panel C for both outputs\",\"rejected_reason\":\"It reduced scalar error on the outer shell but worsened several ordinary folds and did not improve trajectories. The test radii are mostly inside the training range.\"}],\"rationale\":\"Fit low-dimensional directional transforms on each training fold. If they reduce errors across both ordinary and outer-shell slices, prefer them to unconstrained interpolation; otherwise retain the better validated kernel for that output.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c94890954641676a6ed7159b0be62fd56f4219b2b7fddba3bb3b2d0fd97f6e8e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38698.56,
+      "usage_known": true,
+      "prompt_tokens": 31914,
+      "cached_tokens": 9344,
+      "completion_tokens": 1466
+    }
+  ]
+}

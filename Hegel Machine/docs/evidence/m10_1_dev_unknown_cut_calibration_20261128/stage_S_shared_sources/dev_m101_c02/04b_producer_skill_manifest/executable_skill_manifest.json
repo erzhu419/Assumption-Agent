@@ -1,0 +1,105 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_m101_c02_batch_00_0d0298d7d520",
+    "source_hash": "0d0298d7d5206d3f6997a8a20174021f054f4e0edec85cc412419b84d70fed75",
+    "parent_ids": [],
+    "source_episode_id": "dev_m101_c02",
+    "task_id": "dev_m101_c02_batch_00__blind_campaign",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/m101_ablation.py",
+        "archived_relpath": "producers/tmp__m101_ablation.py",
+        "bytes": 2188,
+        "sha256": "b798d148e88d44a8907182052819d1d3dfa4088ff1c415dac1b8963bc5408ede"
+      },
+      {
+        "container_path": "/tmp/m101_audit.py",
+        "archived_relpath": "producers/tmp__m101_audit.py",
+        "bytes": 3433,
+        "sha256": "b1b9e4f455cf9feabe3bfc3281faa1ac2c422c4959ea5697543c0a5bc45b5294"
+      },
+      {
+        "container_path": "/tmp/m101_compare.py",
+        "archived_relpath": "producers/tmp__m101_compare.py",
+        "bytes": 2445,
+        "sha256": "8d8c52586df21e15ef71dd6d8eada4d9b414bfb00c42f2da52209bb48782380d"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=135)\nfor k,v in s.items():\n print(k)\n for j,a in (v.items() if isinstance(v,dict) else [('',v)]):\n  a=np.asarray(a);print(j,a.shape,'min',a.min(axis=0),'max',a.max(axis=0),'sample',a[:4] if a.ndim>1 or a.size>10 else a)\nPY",
+      "cd /holdout_task; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust reference-panel alignment viscoelastic relaxation'; python3 - <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations_with_replacement\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True,linewidth=130)\nls=lambda X,y:np.linalg.lstsq(X,y,rcond=None)[0]\nfor p in ['panel_a','panel_b','panel_c']:\n d=s[p];u=d['u'];X=np.c_[np.ones(len(u)),u];Q=np.c_[X,*[u[:,i]*u[:,j] for i,j in combinations_with_replacement(range(4),2)]]\n for k,v in d.items():\n  if k=='u'",
+      "cd /holdout_task; python3 - <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations_with_replacement as cwr\nfrom scipy.optimize import least_squares\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=6,suppress=True,linewidth=140); ls=lambda X,Y:np.linalg.lstsq(X,Y,rcond=None)[0]; aff=lambda x:np.c_[np.ones(len(x)),x]; a=s['panel_a'];b=s['panel_b']; w=np.max(abs(a['v']-a['u']),axis=1)<1; A=ls(aff(a['u'][w]),a['v'][w]); B=ls(aff(b['u']),b['v']); x=s['train']['x'];y=s['train']['y'];z=s['train']['traj'];t=s['eval_times'];\nfor an,xa in [('raw',x),('",
+      "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Calibrated scalar response and shared two-mode trajectory regression.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _fit(design, target):\n    return np.linalg.lstsq(design, target, rcond=None)[0]\n\n\ndef _coordinates(study, x):\n    a = study['panel_a']\n    # The calibration is close to identity; the three corrupted rows are far outside it.\n    good = np.max(np.abs(a['v'] - a['u']), axis=1) < 1.0\n    u, v = a['u'][good], a['v'][good]\n    centered = u - u.mean(axis=0)\n    gain = np.sum(centered * (v - v.mean(axis=0)), axis=0) / n",
+      "cat > /tmp/m101_audit.py <<'PY'\nimport importlib.util, pickle\nfrom itertools import combinations, combinations_with_replacement\nimport numpy as np\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open(p+'public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\ntr=s['train']; x=m._coordinates(s,tr['x']); y=tr['y']; z=tr['traj']; n=len(x); ids=np.arange(n); base=m._scalar_design(x)\nq=np.column_stack([x[:,i]*x[:,j] for i,j in combinations_with_replacement(range(4),2)])\nfor",
+      "cat > /tmp/m101_ablation.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open(p+'public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\ntr=s['train']; x=m._coordinates(s,tr['x']); y=tr['y']; z=tr['traj']; t=s['eval_times']; ids=np.arange(len(x)); d=m._scalar_design(x)\naff=lambda q:np.c_[np.ones(len(q)),q]\ncontrols={'intercept+linear':aff(x),'tied':d,'difference':"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__m101_audit.py",
+      "primary_producer_container_path": "/tmp/m101_audit.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 1892,
+        "sha256": "ce1a2f606d4d41f388cbe2521753f6892c9672638d6f979f9084b40ce42bbc7d",
+        "content_addressed_ref": "content_addressed_blobs/ce1a2f606d4d41f388cbe2521753f6892c9672638d6f979f9084b40ce42bbc7d.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "0d0298d7d5206d3f6997a8a20174021f054f4e0edec85cc412419b84d70fed75",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "cat > /tmp/m101_ablation.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); m=importl",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "0d0298d7d5206d3f6997a8a20174021f054f4e0edec85cc412419b84d70fed75",
+        "expected_candidate_sha256": "0d0298d7d5206d3f6997a8a20174021f054f4e0edec85cc412419b84d70fed75",
+        "computed_candidate_sha256": "0d0298d7d5206d3f6997a8a20174021f054f4e0edec85cc412419b84d70fed75",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 1892
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_0d0298d7"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": []
+  }
+}

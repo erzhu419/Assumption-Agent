@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "18cee3911afc403ebd8863ce02a58876",
+  "call_seq": 6,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:21:42.037667+00:00",
+  "ended_at_utc": "2026-11-28T08:22:20.605691+00:00",
+  "request_sha256": "2fc11fc9d55ba1ec0ec630f76c3e66109c5eacb260ed9b09f8ee611cc67383a1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45816,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29605,
+    "cached_tokens": 9344,
+    "completion_tokens": 1567
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/grammar.py <<'PY'\\nfrom graphprobe import *\\nfrom itertools import combinations_with_replacement\\n\\ndef features(s,x):\\n ai,af,B,C,D=ops(s); z=ai(x); c,d=C(z),D(z); b=B(z)\\n F={};\\n def add(n,v):\\n  v=np.asarray(v); v=v[:,None] if v.ndim==1 else v\\n  for j,a in enumerate(v.T): F[n+(str(j) if v.shape[1]>1 else '')]=a\\n for n,u in [('z',z),('b',b),('c',c),('d',d),('CB',C(b)),('DB',D(b))]:\\n  add(n,u)\\n  for q,f in [('sq',lambda a:a*a),('cube',lambda a:a**3),('tanh',np.tanh),('sin',np.sin),('cos',np.cos),('rat',lambda a:a/(1+a*a)),('abs',abs)]:add(f'{q}({n})',f(u))\\n for n,u in [('cc',c),('dd',d),('zz',z),('bb',b)]:\\n  for i,j in combinations_with_replacement(range(4),2):\\n   if i!=j:add(n+str(i)+str(j),u[:,i]*u[:,j])\\n for m,u,n,v in [('c',c,'d',d),('z',z,'c',c),('z',z,'d',d),('b',b,'c',c),('b',b,'d',d)]:\\n  add(m+n+'dot',np.sum(u*v,axis=1)); add(m+n+'dist',np.sum((u-v)**2,axis=1));add(m+n+'cosim',np.sum(u*v,axis=1)/np.maximum(1e-8,np.linalg.norm(u,axis=1)*np.linalg.norm(v,axis=1)))\\n  add('sum('+m+n+')',u+v);add('diff('+m+n+')',u-v)\\n  for i in range(4):\\n   for j in range(4):\\n    a,e=u[:,i],v[:,j]; q=m+str(i)+n+str(j)\\n    for name,w in [('p',a*e),('r',a/(1+e*e)),('R',e/(1+a*a)),('T',np.tanh(a+e)),('S',np.tanh(a-e)),('D',(a-e)**2)]:add(name+q,w)\\n for n,u in [('c',c),('d',d),('z',z),('b',b)]:\\n  add(n+'sum',u.sum(1));add(n+'norm',(u*u).sum(1));add(n+'prod',u.prod(1))\\n  for i,j,k in combinations_with_replacement(range(4),3):add(n+str(i)+str(j)+str(k),u[:,i]*u[:,j]*u[:,k])\\n return np.column_stack(list(F.values())),np.array(list(F))\\n\\ndef greedy(X,Y,tr,te,count):\\n mu=X[tr].mean(0); X=X-mu; sc=np.linalg.norm(X[tr],axis=0); X=X/np.maximum(sc,1e-10); Ym=Y[tr].mean(); y=Y[tr]-Ym\\n E=X[tr].copy(); selected=[]; vals=[]; pred=[]\\n for k in range(count):\\n  score=abs(y@E)/np.maximum(np.linalg.norm(E,axis=0),1e-8); score[selected]=-1; j=score.argmax(); selected.append(j)\\n  q=E[:,j]/np.linalg.norm(E[:,j]); E-=np.outer(q,q@E); y-=q*(q@y)\\n  w=fit(X[tr][:,selected],Y[tr]-Ym); pred.append(X[te][:,selected]@w+Ym); vals.append(np.sqrt(np.mean(y*y)))\\n return selected, np.array(pred), vals\\nif __name__=='__main__':\\n T=S['train']; h=T['traj']; t=S['eval_times']; X,N=features(S,T['x']); r=np.array([.4,1.8,5.2]); V=-np.expm1(-t[:,None]*r); A=fit(V,h.T).T; print('amp ranges',A.min(0),A.max(0),'amp correlation',np.corrcoef(A.T)); print('time reconstruction',np.std(h-A@V.T));\\n folds=[(np.arange(56),np.arange(56,72))]+[(np.setdiff1d(np.arange(72),te),te) for te in np.array_split(np.random.default_rng(123).permutation(72),5)];\\n for key,y in zip(['y','terminal','slow','medium','quick','initial slope'],[T['y'],h[:,-1],*A.T,A@r]):\\n  e=[]\\n  for i,(tr,te) in enumerate(folds):\\n   k,p,v=greedy(X,y,tr,te,13);e.append(np.mean(abs(p-y[te]),axis=1));\\n   if i<2: print(key,i,list(zip(N[k],np.round(v,4))),np.round(e[-1],4))\\n  print('avg/max',key,np.round(np.mean(e,axis=0),4),np.round(np.max(e,axis=0),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/grammar.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 linear readout of calibrated C branches -> H2 sparse nonlinear readouts of shared temporal modes; the current best worst-fold MAE is 0.6031 for y and 0.4265 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the larger unrestricted regression\",\"rejected_reason\":\"Adding every cross-product worsened held-out error; test a sparse grammar with selection inside each fold instead.\"}],\"rationale\":\"The calibrated C branches outperform the archived solver, but their linear readout leaves substantial error. Separating the time modes can reveal which sparse products or rational terms drive each output.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "50ca1dfa1a8a3421d3cff0f97febac8030db74304ad36b573bd690b77b48551b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41099.71,
+      "usage_known": true,
+      "prompt_tokens": 29605,
+      "cached_tokens": 9344,
+      "completion_tokens": 1567
+    }
+  ]
+}

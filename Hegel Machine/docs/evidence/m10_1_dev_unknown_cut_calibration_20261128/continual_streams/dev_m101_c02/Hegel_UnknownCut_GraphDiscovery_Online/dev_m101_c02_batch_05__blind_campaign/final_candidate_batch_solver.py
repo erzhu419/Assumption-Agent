@@ -1,0 +1,100 @@
+"""Compiled ExecutableComputationDAG runtime (`M10.1` instrumented anti-aliasing & `exec_count == 1`)."""
+from __future__ import annotations
+from copy import deepcopy
+import hashlib
+import json
+import math
+import os
+import numpy as np
+
+_DAG_SPEC = '{"dag_id": "dag_05", "depth": 3, "fanout_by_node": {"node_00": 1, "node_01": 1, "node_02": 0}, "incoming": {"node_00": ["__input__"], "node_01": ["node_00"], "node_02": ["__input__", "node_01"]}, "max_fanout": 1, "node_code_shas": {"node_00": "40f2fd6b04bd18625f4b7b11c8b602aedc2abc9eaf49cf37efa0442d49585f70", "node_01": "f557250ee3f18181523186667b7928e83f502734118b825a9880b9c58f1f842e", "node_02": "e0dfc20c421bbf3fee1e712432d2bc9f90d28402affea24e96c3fb0f1dc2498f"}, "shared_fanout_nodes": [], "sink_node_id": "node_02", "topo_order": ["node_00", "node_01", "node_02"]}'
+_NODE_SOURCES = '{"node_00": "import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _fit_forward(u, v):\\n    n, d = u.shape\\n    nxt = np.roll(u, -1, axis=1)\\n    axis = np.eye(d)\\n    # Axis-specific offsets and gains; the three nonlinear/coupled terms\\n    # share coefficients around the coordinate cycle.\\n    design = np.concatenate((\\n        np.broadcast_to(axis, (n, d, d)),\\n        u[:, :, None] * axis,\\n        np.stack((nxt, u * nxt, u**3), axis=-1),\\n    ), axis=-1)\\n    weight = np.ones(n)\\n    for _ in range(40):\\n        w = np.sqrt(weight)[:, None, None]\\n        coef = np.linalg.lstsq((design * w).reshape(n*d, -1),\\n                               (v * w[..., 0]).ravel(), rcond=None)[0]\\n        residual = np.linalg.norm(design @ coef - v, axis=1)\\n        scale = max(1e-10, 0.1 * np.median(residual))\\n        weight = scale / np.maximum(scale, residual)\\n    # Panel A contains three grossly corrupted observations.\\n    good = np.argsort(residual)[:-3]\\n    return np.linalg.lstsq(design[good].reshape(len(good)*d, -1),\\n                           v[good].ravel(), rcond=None)[0]\\n\\n\\ndef _invert(x, coef):\\n    d = x.shape[1]\\n    j = np.arange(d)\\n    k = (j + 1) % d\\n    bias, gain = coef[:d], coef[d:2*d]\\n    neighbor, pair, cubic = coef[2*d:]\\n\\n    def forward(u):\\n        return bias + gain*u + (neighbor + pair*u)*u[k] + cubic*u**3\\n\\n    def jacobian(u):\\n        jac = np.diag(gain + pair*u[k] + 3*cubic*u**2)\\n        jac[j, k] = neighbor + pair*u\\n        return jac\\n\\n    initial = np.linalg.solve(jacobian(np.zeros(d)), (x-bias).T).T\\n    result = np.empty_like(initial)\\n    for i, (row, start) in enumerate(zip(x, initial)):\\n        result[i] = least_squares(lambda u: forward(u) - row, start,\\n                                  jac=jacobian, gtol=1e-12).x\\n    return result\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs[\'__input__\']\\n    panel = study[\'panel_a\']\\n    coef = _fit_forward(panel[\'u\'], panel[\'v\'])\\n    n_train = len(study[\'train\'][\'x\'])\\n    calibrated = _invert(np.concatenate((study[\'train\'][\'x\'], study[\'test\'][\'x\'])), coef)\\n    return {\'u_tr\': calibrated[:n_train], \'u_te\': calibrated[n_train:],\\n            \'panel_b\': study[\'panel_b\']}\\n", "node_01": "import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _basis(u, frequency):\\n    return np.column_stack((np.ones(len(u)), u, np.sin(u * frequency)))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    source = inputs[\'node_00\']\\n    panel = source[\'panel_b\']\\n    u, v = panel[\'u\'], panel[\'v\']\\n\\n    def residual(frequency):\\n        design = _basis(u, frequency)\\n        weights = np.linalg.lstsq(design, v, rcond=None)[0]\\n        return (design @ weights - v).ravel()\\n\\n    frequency = least_squares(residual, np.full(u.shape[1], 2.8),\\n                              bounds=(0.35, 6.0), max_nfev=180).x\\n    weights = np.linalg.lstsq(_basis(u, frequency), v, rcond=None)[0]\\n    return {key: source[key] for key in (\'u_tr\', \'u_te\')} | {\\n        \'b_tr\': _basis(source[\'u_tr\'], frequency) @ weights,\\n        \'b_te\': _basis(source[\'u_te\'], frequency) @ weights,\\n    }\\n", "node_02": "import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _c_basis(u, scale):\\n    return np.column_stack((np.ones(len(u)), u, np.tanh(u * scale)))\\n\\n\\ndef _scalar_basis(b):\\n    i, j = np.triu_indices(b.shape[1])\\n    return np.column_stack((np.ones(len(b)), b, b[:, i] * b[:, j]))\\n\\n\\ndef _state_basis(b, c):\\n    return np.column_stack((np.ones(len(b)), b, c, np.tanh(b)))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs[\'__input__\']\\n    mapped = inputs[\'node_01\']\\n    panel = study[\'panel_c\']\\n    u, v = panel[\'u\'], panel[\'v1\']\\n\\n    def residual(scale):\\n        design = _c_basis(u, scale)\\n        weights = np.linalg.lstsq(design, v, rcond=None)[0]\\n        return (design @ weights - v).ravel()\\n\\n    scale = least_squares(residual, np.full(u.shape[1], 2.2),\\n                          bounds=(0.35, 6.0), max_nfev=180).x\\n    weights = np.linalg.lstsq(_c_basis(u, scale), v, rcond=None)[0]\\n    c_train = _c_basis(mapped[\'u_tr\'], scale) @ weights\\n    c_test = _c_basis(mapped[\'u_te\'], scale) @ weights\\n    b_train, b_test = mapped[\'b_tr\'], mapped[\'b_te\']\\n    y_weights = np.linalg.lstsq(_scalar_basis(b_train), study[\'train\'][\'y\'], rcond=None)[0]\\n    y_hat = _scalar_basis(b_test) @ y_weights\\n\\n    trajectory = study[\'train\'][\'traj\']\\n    modes = np.linalg.svd(trajectory, full_matrices=False)[2][:2]\\n    state_weights = np.linalg.lstsq(_state_basis(b_train, c_train),\\n                                   trajectory @ modes.T, rcond=None)[0]\\n    states = (_state_basis(b_test, c_test) @ state_weights) @ modes\\n    final = states[:, -1]\\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), final.mean(), final.std()])\\n    return {\'y_hat\': y_hat, \'state_pred\': states, \'diagnostics_vec\': diagnostics}\\n"}'
+
+def _canon_digest(obj) -> str:
+    h = hashlib.sha256()
+    def _feed(v):
+        if v is None: h.update(b'N;')
+        elif isinstance(v, bool): h.update(b'B1;' if v else b'B0;')
+        elif isinstance(v, (int, np.integer)): h.update(f'I:{int(v)};'.encode())
+        elif isinstance(v, (float, np.floating)):
+            fv = float(v)
+            if math.isnan(fv): h.update(b'F:NaN;')
+            elif math.isinf(fv): h.update(b'F:Inf;')
+            else: h.update(b'F:' + np.asarray([0.0 if fv == 0.0 else fv], dtype='<f8').tobytes() + b';')
+        elif isinstance(v, str): h.update(f'S:{len(v)}:{v};'.encode())
+        elif isinstance(v, np.ndarray):
+            h.update(f'A:{v.dtype.kind}:{v.shape}:'.encode())
+            if v.dtype.kind == 'f':
+                a = np.asarray(v, dtype=np.float64)
+                nm = np.isnan(a)
+                cl = np.where(nm, 0.0, a)
+                cl = np.where(cl == 0.0, 0.0, cl).astype('<f8')
+                h.update(cl.tobytes('C'))
+            else:
+                h.update(np.asarray(v, dtype='<i8').tobytes('C'))
+            h.update(b';')
+        elif isinstance(v, dict):
+            h.update(f'D:{len(v)}:'.encode())
+            for k in sorted(v.keys(), key=str): _feed(str(k)); _feed(v[k])
+            h.update(b';')
+        elif isinstance(v, (list, tuple)):
+            h.update(f'L:{len(v)}:'.encode())
+            for it in v: _feed(it)
+            h.update(b';')
+        else:
+            h.update(repr(v).encode())
+    _feed(obj)
+    return h.hexdigest()
+
+def _load_node_fn(nid: str, src: str):
+    ns = {'__name__': f'_hegel_node_{nid}'}
+    exec(compile(src, f'<dag_node_{nid}>', 'exec'), ns)
+    fn = ns.get('run_node') or ns.get('solve_batch')
+    if not callable(fn):
+        raise RuntimeError(f'DAG node {nid} missing callable run_node/solve_batch')
+    return fn
+
+_COMPILED_FNS = {nid: _load_node_fn(nid, src) for nid, src in json.loads(_NODE_SOURCES).items()}
+_SPEC_OBJ = json.loads(_DAG_SPEC)
+
+def solve_batch(study: dict) -> dict:
+    outputs = {'__input__': deepcopy(study)}
+    exec_counts = {nid: 0 for nid in _SPEC_OBJ['topo_order']}
+    non_identity_checks = {}
+    for nid in _SPEC_OBJ['topo_order']:
+        srcs = _SPEC_OBJ['incoming'][nid]
+        if len(_SPEC_OBJ['topo_order']) == 1 and srcs == ['__input__']:
+            node_in = deepcopy(outputs['__input__'])
+        else:
+            node_in = {s: deepcopy(outputs[s]) for s in srcs}
+        in_dig = _canon_digest(node_in)
+        out_v = _COMPILED_FNS[nid](node_in)
+        exec_counts[nid] += 1
+        if exec_counts[nid] != 1:
+            raise RuntimeError(f'DAG node {nid} executed {exec_counts[nid]} times != 1')
+        if not isinstance(out_v, dict) or not out_v:
+            raise RuntimeError(f'DAG node {nid} must return a non-empty dict')
+        out_dig = _canon_digest(out_v)
+        if nid != _SPEC_OBJ['sink_node_id']:
+            # Anti-identity-shell check: intermediate node cannot merely echo its raw predecessor dict
+            echoed = (out_dig == in_dig) or any(out_dig == _canon_digest(outputs[s]) for s in srcs)
+            if echoed:
+                raise RuntimeError(f'DAG node {nid} failed anti-identity-shell check')
+            non_identity_checks[nid] = True
+        outputs[nid] = out_v
+    trace_fp = os.environ.get('HEGEL_M101_DAG_TRACE_PATH')
+    if trace_fp:
+        trace_obj = {
+            'dag_id': _SPEC_OBJ['dag_id'],
+            'active_node_count': len(_SPEC_OBJ['topo_order']),
+            'depth': _SPEC_OBJ['depth'],
+            'max_fanout': _SPEC_OBJ['max_fanout'],
+            'shared_fanout_nodes': _SPEC_OBJ['shared_fanout_nodes'],
+            'topo_order': _SPEC_OBJ['topo_order'],
+            'exec_counts': exec_counts,
+            'all_exec_count_eq_1': all(v == 1 for v in exec_counts.values()),
+            'non_identity_checks': non_identity_checks,
+            'node_code_shas': _SPEC_OBJ['node_code_shas'],
+        }
+        open(trace_fp, 'w', encoding='utf-8').write(json.dumps(trace_obj, sort_keys=True))
+    return outputs[_SPEC_OBJ['sink_node_id']]

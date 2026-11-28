@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4a27ad0fd485431d97c202de545e65f1",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c02_batch_06__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_06__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:21:02.790134+00:00",
+  "ended_at_utc": "2026-11-28T08:21:35.857098+00:00",
+  "request_sha256": "9d4f40393657d3bd88fad8aeaa284cb5a145b1de4d87fe7b85b014cbf6a6b0b6",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 60510,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34869,
+    "cached_tokens": 9344,
+    "completion_tokens": 1226
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/symmetric.py <<'PY'\\nfrom explore import *\\nfrom itertools import combinations_with_replacement\\nB=bv; U=u; C=np.sum(U*np.roll(B,1,axis=1),axis=1); N=len(y); i=np.arange(N)\\nW=np.c_[np.ones(N),B,C]; norm=np.sum(B*B,axis=1)\\nQ=np.column_stack([B[:,j]*B[:,k] for j,k in combinations_with_replacement(range(4),2)])\\nsigned=(B@np.array([1.,-1.,-1.,1.])/2)**2\\nrng=np.random.default_rng(2027)\\nfolds=[(i[:52],i[52:])]+[(p[:52],p[52:]) for p in (rng.permutation(N) for _ in range(40))]\\nfor z in [*U.T,abs(C),np.linalg.norm(U,axis=1),np.linalg.norm(B,axis=1)]:\\n j=np.argsort(z); folds.append((j[:-15],j[-15:]))\\nmodels={'base':np.empty((N,0)), 'signed-one':(norm-2*signed)[:,None], 'signed-two':np.c_[norm,signed], 'full-ridge':Q, 'isotropic-rank1':norm[:,None]}\\nfor name, X in models.items():\\n E=[]\\n for I,J in folds:\\n  w=np.linalg.lstsq(W[I],y[I],rcond=None)[0]; m=X.shape[1]\\n  p0=np.r_[2.,w[1:5]/2,0.,w[5],w[0],np.zeros(m)]\\n  if name=='isotropic-rank1':p0=np.r_[p0,.25*np.array([1.,-1.,-1.,1.])]\\n  def pred(p,K):\\n   z=p[0]*np.tanh(B[K]@p[1:5]+p[5])+p[6]*C[K]+p[7]+X[K]@p[8:8+m]\\n   return z-(B[K]@p[9:])**2 if name=='isotropic-rank1' else z\\n  def err(p):\\n   e=pred(p,I)-y[I]\\n   return np.r_[e,np.sqrt(.3)*X[I].std(0)*p[8:]] if name=='full-ridge' else e\\n  fit=least_squares(err,p0,max_nfev=250)\\n  E.append(np.mean(abs(pred(fit.x,J)-y[J])))\\n  if len(E)==1: print(name,'public-fit coefficients',np.round(fit.x,5))\\n print(name,'public/mean-random/worst-random/worst-tail',np.round([E[0],np.mean(E[1:41]),max(E[1:41]),max(E[41:])],6))\\nfor name,X in [('base',W),('base+coords',np.c_[W,U]),('base+coords+signed',np.c_[W,U,norm,signed])]:\\n E=np.array([np.mean(abs(X[J]@np.linalg.lstsq(X[I],tr[I],rcond=None)[0]-tr[J]),axis=0) for I,J in folds]); e=E.mean(axis=1)\\n print('trajectory',name,'public/worst-random/worst-tail/worst-horizon',np.round([e[0],max(e[1:41]),max(e[41:]),E.max()],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 python3 /tmp/symmetric.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted quadratic correction → H2 isotropic curvature minus one signed projection; the unrestricted correction reached 0.024023 public and 0.045677 worst-tail scalar MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a single squared projection without isotropic curvature\",\"rejected_reason\":\"It worsened tail error and cannot capture the three positive eigenvalues of the fitted quadratic form.\"}],\"rationale\":\"The fitted quadratic has three similar positive eigenvalues and one negative direction close to a signed coordinate contrast. Test whether this symmetry lowers tail error on fresh resplits; if it does not, use the regularized full quadratic, which already improves both the public split and the tails. Check separately whether calibrated coordinates improve every trajectory horizon enough to include them.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "ca0bd9aabd357d46ffc01652a4816a272b0d411e815cbeb92bde54af7b711022",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35555.38,
+      "usage_known": true,
+      "prompt_tokens": 34869,
+      "cached_tokens": 9344,
+      "completion_tokens": 1226
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4bd9f63ce1a7451c819362869199ca81",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Flat_MonolithicArchive_Online__dev_m101_c02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:08:22.248000+00:00",
+  "ended_at_utc": "2026-11-28T08:09:03.900445+00:00",
+  "request_sha256": "e4f8a024a28e48fe8c80f71200be75868f8285d91684e45094008fb213f7a18e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46749,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30199,
+    "cached_tokens": 9344,
+    "completion_tokens": 1777
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated paired-index scalar response and two-mode trajectory prediction.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _coordinates(study, x):\\n    a = study['panel_a']\\n    keep = np.max(np.abs(a['v'] - a['u']), axis=1) < 1\\n    u, v = a['u'][keep], a['v'][keep]\\n    du = u - u.mean(axis=0)\\n    gain = np.sum(du * (v - v.mean(axis=0)), axis=0) / np.sum(du**2, axis=0)\\n    offset = v.mean(axis=0) - u.mean(axis=0) * gain\\n    b = study['panel_b']\\n    operator = _fit(_affine(b['u']), b['v'])\\n    return _affine((x - offset) / gain) @ operator\\n\\n\\ndef _scalar_features(z):\\n    interaction = z[:, 0] * z[:, 2] + z[:, 1] * z[:, 3]\\n    return np.column_stack((_affine(z), interaction))\\n\\n\\ndef _scalar(z, target, query):\\n    d, dq = _scalar_features(z), _scalar_features(query)\\n\\n    def design(d, p):\\n        h = d @ p\\n        return np.column_stack((np.ones(len(h)), h, np.arctan(h)))\\n\\n    def residual(p):\\n        a = design(d, p)\\n        return a @ _fit(a, target) - target\\n\\n    init = _fit(d, target)\\n    opt = min((least_squares(residual, scale * init, max_nfev=150)\\n               for scale in (0.35, 0.7, 1.15, 1.6)), key=lambda r: r.cost)\\n    return design(dq, opt.x) @ _fit(design(d, opt.x), target)\\n\\n\\ndef _trajectory(z, target, query, t):\\n    coefficients = _fit(z, target)\\n\\n    def basis(rates):\\n        return np.stack((np.log1p(t * rates[0]), -np.expm1(-t * rates[1])))\\n\\n    def residual(rates):\\n        b = basis(rates)\\n        return (z @ (_fit(b.T, coefficients.T).T @ b - coefficients)).ravel()\\n\\n    rates = least_squares(residual, [1.4, 0.7], bounds=(0.001, 20)).x\\n    b = basis(rates)\\n    return query @ _fit(b.T, coefficients.T).T @ b\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    z = _coordinates(study, train['x'])\\n    q = _coordinates(study, study['test']['x'])\\n    y = _scalar(z, train['y'], q)\\n    state = _trajectory(z, train['traj'], q, study['eval_times'])\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\ncat > /tmp/modes02.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom scipy.optimize import least_squares\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; z=m._coordinates(s,s['train']['x']); T=s['train']['traj']; t=s['eval_times']; y=s['train']['y']\\nB=np.stack([np.log1p(1.4*t),-np.expm1(-.7*t)]); print('two-mode loadings',np.linalg.lstsq(B.T,np.linalg.lstsq(z,T,rcond=None)[0].T,rcond=None)[0].T.round(5));\\nfor name in ('full','separated','separated_fixed'):\\n es=[]; ends=[]; rates=[]\\n for vi in [np.arange(56,72)]+[np.random.default_rng(seed).permutation(72)[:16] for seed in range(20,32)]+[np.argsort(np.linalg.norm(z,axis=1))[-16:]]:\\n  ti=np.setdiff1d(np.arange(72),vi)\\n  def d(i,p):\\n   L=np.log1p(p[0]*t); E=-np.expm1(-p[1]*t); a=z[i,:,None];\\n   return np.concatenate((a*L,a*E),axis=1).transpose(0,2,1).reshape(-1,8) if name=='full' else np.concatenate((a[:,:1]*L,a[:,1:]*E),axis=1).transpose(0,2,1).reshape(-1,4)\\n  def w(p):return m._fit(d(ti,p),T[ti].ravel())\\n  p=least_squares(lambda p:d(ti,p)@w(p)-T[ti].ravel(),[1.4,.7],bounds=(.001,20)).x if name!='separated_fixed' else [1.4,.7]; rates.append(p); err=abs((d(vi,p)@w(p)).reshape(-1,len(t))-T[vi]); es.append(err.mean()); ends.append(err[:,-1].mean())\\n print(name,'traj mae',np.round(es,6),'endpoint mae',np.round(ends,6),'rate range',np.min(rates,axis=0),np.max(rates,axis=0))\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 /tmp/modes02.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (pure saturation and unconstrained temporal loadings) -> H2 (linear-plus-arctangent paired index and two shared temporal modes); worst scalar MAE was 0.00547 across eight public splits, and worst trajectory MAE was 0.00430.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use softsign instead of arctangent\",\n      \"rejected_reason\": \"Ordinary holdouts are comparable, but arctangent had lower error on the blocked tail split.\"\n    }\n  ],\n  \"rationale\": \"Write the solver with the validated scalar correction. Compare full and separated temporal loadings on held-out rows, including high-norm inputs and the final timestamp, to determine whether a simpler trajectory model improves prediction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "94aae3003d068478016737ce785ff215b61ac159e262d80126af62654d17d6cb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46749.43,
+      "usage_known": true,
+      "prompt_tokens": 30199,
+      "cached_tokens": 9344,
+      "completion_tokens": 1777
+    }
+  ]
+}

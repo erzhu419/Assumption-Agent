@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e15db62a9fb446f9b1f305c77a6314ac",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:17:38.449294+00:00",
+  "ended_at_utc": "2026-11-28T08:18:10.527127+00:00",
+  "request_sha256": "26964138487d8b44747e0a46425411b4c04e9bb5916990e4c2f3e21242ed6407",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56578,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33922,
+    "cached_tokens": 9344,
+    "completion_tokens": 1275
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/^t=s\\\\[/,$d' /tmp/structure.py >/tmp/caltest.py; cat >>/tmp/caltest.py <<'PY'\\nfrom itertools import combinations\\nA=s['panel_a']; U=A['u']; W=A['v']; rng=np.random.default_rng(19)\\nold=run_path('/tmp/hegel_continual_archive/dev_m101_c04_batch_02_solver.py')\\nco=old['_calibrate'](A); print('cyclic calibration coefficients',co)\\nfor name,F in [('diag',[a(U[:,j:j+1]) for j in range(4)]),('affine',[a(U)]*4),('cyclic',[old['_calibration_features'](U,j) for j in range(4)]),('sep3',[sep(U,3)]*4),('affine_diag_nl',[a(np.c_[U,U[:,j]**2,U[:,j]**3]) for j in range(4)])]:\\n pred=np.empty_like(W); counts=[]\\n for j,D in enumerate(F):\\n  err=np.full(len(U),np.inf)\\n  for _ in range(180):\\n   ii=rng.choice(len(U),D.shape[1]+4,replace=False); e=abs(D@ls(D[ii],W[ii,j])-W[:,j]);\\n   if np.median(e)<np.median(err):err=e\\n  m=err<max(5*np.median(err),.0005); counts.append(m.sum()); pred[:,j]=D@ls(D[m],W[m,j]);\\n print(name,'inlier median',np.median(abs(pred-W),axis=0),'counts',counts)\\nprint('cyclic max correction',abs(old['_unwarp'](X,co)-x).max(0)); xx=old['_unwarp'](X,co)\\nt=s['eval_times']; T=tr['traj']; idx=np.arange(72); folds=[(idx[:56],idx[56:])]+[(idx[idx%5!=i],idx[idx%5==i]) for i in range(5)]\\nfor calib,z0 in [('affine',x),('cyclic',xx),('raw',X)]:\\n z={'x':z0,'b':b(z0),'c':c(z0),'d':d(z0)}\\n z.update({k+j:f(z[j]) for k,f in [('b',b),('c',c),('d',d)] for j in 'bcd'})\\n res=[]\\n for k,j in combinations(z,2):\\n  v,w=z[k],z[j]\\n  for label,D in [('lin',a(np.c_[v,w])),('diag2',a(np.c_[v,w,v*v,w*w,v*w])),('sep2',sep(np.c_[v,w],2)),('poly2',poly(np.c_[v,w],2)),('tanh',a(np.c_[v,w,np.tanh(v),np.tanh(w)]))]:\\n   E=[]\\n   for i,h in folds:\\n    mu=D[i].mean(0); scale=np.maximum(D[i].std(0),1e-8); F=(D-mu)/scale; F[:,0]=1\\n    lam=0.1 if D.shape[1]<30 else 1.; C=np.linalg.solve(F[i].T@F[i]+np.diag(np.r_[0,np.full(D.shape[1]-1,lam)]),F[i].T@Y[i]); e=abs(F[h]@C-Y[h]); E.append([e[:,0].mean(),e[:,1:].mean()])\\n   E=np.asarray(E); res.append((k,j,label,*E[0],*E[1:].mean(0),*E[1:].max(0)))\\n for p in (5,6):\\n  print(calib,p,[(r[:3],np.round(r[3:],4).tolist()) for r in sorted(res,key=lambda r:r[p])[:5]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/caltest.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (diagonal affine calibration) -> H2 (nonlinear cross-coordinate calibration upstream of the auxiliary branches); current worst-fold MAEs are 0.1570 for scalar and 0.1416 for trajectory with sparse cross-branch models.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Expand the sparse interaction dictionary again\",\n      \"rejected_reason\": \"The selected terms varied substantially and held-out errors remained high. The reference panel can test the upstream coordinate map independently.\"\n    }\n  ],\n  \"rationale\": \"Test whether diagonal calibration leaves systematic reference-panel residuals and whether nonlinear inversion reduces errors on both outcome paths. Keep the simpler calibration if the extra terms do not improve held-out predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "116e4a56786872538b2dadad4a243f13aaf466e6a446bdebce76e0eb6fe95a18",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34637.58,
+      "usage_known": true,
+      "prompt_tokens": 33922,
+      "cached_tokens": 9344,
+      "completion_tokens": 1275
+    }
+  ]
+}

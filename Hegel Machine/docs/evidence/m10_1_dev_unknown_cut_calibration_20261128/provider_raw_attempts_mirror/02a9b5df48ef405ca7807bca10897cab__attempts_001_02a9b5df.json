@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "02a9b5df48ef405ca7807bca10897cab",
+  "call_seq": 1,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Fixed_TwoStage_Modular_Online__init_decomp_dev_m101_c03_batch_01",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:58:01.972283+00:00",
+  "ended_at_utc": "2026-11-28T07:58:39.646137+00:00",
+  "request_sha256": "8338065c7f62b29292b239b014cdd7c35bbe59431bc9a7b6b693b0f996d3b764",
+  "system_prompt_chars": 2229,
+  "stdin_payload_chars": 5814,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 13444,
+    "cached_tokens": 0,
+    "completion_tokens": 1539
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"The solver has two distinct stages: panel-calibrated feature construction and a temporal ridge readout. The largest observed shift is in panel_c.v1: linear R² fell from 0.967 to 0.078, while nonlinear gain rose from 0.033 to 0.691. Panel_a and panel_c.v2 summaries changed much less, and the solver does not use panel_b. Split at the feature/readout boundary so the v1 fit can be revised without changing the readout. This extraction preserves the source computations and leaves target adaptation for a separate change.\",\n  \"nodes\": [\"node_00\", \"node_01\"],\n  \"edges\": [[\"__input__\", \"node_00\"], [\"node_00\", \"node_01\"]],\n  \"sink_node_id\": \"node_01\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\n\\ndef _calibration(panel):\\n    u, v = panel['u'], panel['v']\\n    i, j = np.triu_indices(len(u), 1)\\n    coeff = []\\n    for uj, vj in zip(u.T, v.T):\\n        dx = uj[i] - uj[j]\\n        valid = dx != 0\\n        slope = np.median((vj[i] - vj[j])[valid] / dx[valid])\\n        offset = np.median(vj - slope * uj)\\n        r = abs(vj - offset - slope * uj)\\n        keep = r <= 6 * np.median(r) + 1e-8\\n        coeff.append(np.linalg.lstsq(np.column_stack((np.ones(keep.sum()), uj[keep])), vj[keep], rcond=None)[0])\\n    return np.asarray(coeff).T\\n\\n\\ndef _branch(u, v, first):\\n    def basis(z, p):\\n        return 0.45*z + np.tanh(p*z) if first else z + p*z*z\\n\\n    def fit(p):\\n        f = basis(u, p)\\n        mean = f.mean(axis=0)\\n        g = f - mean\\n        left, singular, right = np.linalg.svd(g.T @ (v - v.mean(axis=0)))\\n        mat = (left @ right) * (singular.sum() / np.sum(g*g))\\n        bias = v.mean(axis=0) - mean @ mat\\n        return mat, bias\\n\\n    def error(p):\\n        mat, bias = fit(p)\\n        return np.sum((basis(u, p) @ mat + bias - v)**2)\\n\\n    p = minimize_scalar(error, bounds=(0.5, 4) if first else (0.05, 1), method='bounded').x\\n    mat, bias = fit(p)\\n    return lambda z: basis(z, p) @ mat + bias\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train = study['train']\\n    n = len(train['x'])\\n    x = np.vstack((train['x'], study['test']['x']))\\n    offset, gain = _calibration(study['panel_a'])\\n    z = (x - offset) / gain\\n    panel = study['panel_c']\\n    a = _branch(panel['u'], panel['v1'], True)(z)\\n    b = _branch(panel['u'], panel['v2'], False)(z)\\n    mixed = (a[:, :, None] * b[:, None, :]).reshape(len(z), 16)\\n    linear = np.column_stack((np.ones(len(z)), a, b))\\n    return {'n': n, 'linear': linear, 'mixed': mixed, 'y': train['y'],\\n            'traj': train['traj'], 'eval_times': study['eval_times']}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ridge(x, y, penalty):\\n    gram = x.T @ x\\n    gram[np.diag_indices_from(gram)] += penalty\\n    gram[0, 0] -= penalty\\n    return np.linalg.solve(gram, x.T @ y)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    features = inputs['node_00']\\n    n = features['n']\\n    linear, mixed = features['linear'], features['mixed']\\n    dot = mixed[:, [0, 5, 10, 15]].sum(axis=1)\\n    common = np.column_stack((linear, dot))\\n    slow = np.column_stack((linear, mixed[:, 1]))\\n    times = np.asarray(features['eval_times'])[:, None]\\n\\n    def time_basis(rates):\\n        return -np.expm1(-times * rates)\\n\\n    def residual(rates):\\n        basis = time_basis(rates)\\n        observed = features['traj'].T\\n        return (basis @ np.linalg.lstsq(basis, observed, rcond=None)[0] - observed).ravel()\\n\\n    rates = least_squares(residual, [1.8, 0.4], bounds=([1.0, 0.01], [10.0, 1.0])).x\\n    temporal = time_basis(rates)\\n    amplitudes = np.linalg.lstsq(temporal, features['traj'].T, rcond=None)[0].T\\n    main = common[n:] @ _ridge(common[:n], np.column_stack((features['y'], amplitudes[:, 0])), 0.00015)\\n    tail = slow[n:] @ _ridge(slow[:n], amplitudes[:, 1], 0.0003)\\n    y = main[:, 0]\\n    trajectory = np.column_stack((main[:, 1], tail)) @ temporal.T\\n    end = trajectory[:, -1]\\n    return {'y_hat': y, 'state_pred': trajectory,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "23b4e1db9df0c5cd54275da119ce57565bd335a180bf76e651ff6cfb622413ec",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40131.26,
+      "usage_known": true,
+      "prompt_tokens": 13444,
+      "cached_tokens": 0,
+      "completion_tokens": 1539
+    }
+  ]
+}

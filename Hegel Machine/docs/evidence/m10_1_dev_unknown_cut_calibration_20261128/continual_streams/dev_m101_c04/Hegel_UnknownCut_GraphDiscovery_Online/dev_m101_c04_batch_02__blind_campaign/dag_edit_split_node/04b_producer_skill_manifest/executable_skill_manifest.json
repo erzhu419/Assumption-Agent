@@ -1,0 +1,141 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_m101_c04_batch_02_864c62c3bcc1",
+    "source_hash": "864c62c3bcc1df6c5ac2b831ec24e058ad0b28e0e3221f2f4d6005566d321225",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_split_node",
+    "task_id": "dev_m101_c04_batch_02__blind_campaign__split_node",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m101_c04_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m101_c04_batch_00_solver.py",
+        "bytes": 2379,
+        "sha256": "8e5e066db2e5ed651242064b84055b93b6496b62ca82bfb40735981939dd8e89"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json public_asset_index.json _frozen_nodes/node_01.py test_dag_candidate.py validate_public_schema.py && python3 - <<'PY'\nimport pickle, numpy as np\nwith open('public_batch.pkl','rb') as f: d=pickle.load(f)\ndef show(x,p=''):\n if isinstance(x,dict):\n  for k,v in x.items(): show(v,p+'/'+str(k))\n elif isinstance(x,(list,tuple)) and x and isinstance(x[0],dict):\n  print(p,type(x).__name__,len(x));show(x[0],p+'/0')\n else:\n  a=np.asarray(x); print(p,a.shape,a.dtype,a.reshape(-1)[:8])\nshow(d)\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust ",
+      "cd /holdout_task && cat _frozen_nodes/node_01.py test_dag_candidate.py && python3 - <<'PY'\nimport pickle,itertools,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']\nfor name in ('panel_a','panel_b'):\n u,v=[s[name][k] for k in ('u','v')]\n cand=[(d,tuple(itertools.combinations_with_replacement(range(4),d))) for d in range(4)]\n bases={'affine':sum((list(q) for d,q in cand[:2]),[]),'pure cubic':sum((list(q) for d,q in cand[:2]),[])+[(i,i,i) for i in range(4)],'cross quadratic + pure cubic':sum((list(q) for d,q in cand[:2]),[])+[q for q in cand[2][1] if len(set(q))==2]+[(i,i,i) f",
+      "cd /holdout_task\ncat > node_02.py <<'PY'\nimport numpy as np\n\n\ndef _fit_forward(u, v):\n    neighbor = np.roll(u, -1, axis=1)\n    design = np.stack((np.ones_like(u), u, neighbor, u * neighbor, u**3), axis=-1)\n\n    def fit(weights):\n        return np.array([\n            np.linalg.lstsq(design[:, j] * weights[:, None], v[:, j] * weights, rcond=None)[0]\n            for j in range(u.shape[1])\n        ]).T\n\n    coef = fit(np.ones(len(u)))\n    for _ in range(30):\n        residual = np.linalg.norm(v - np.einsum('njk,kj->nj', design, coef), axis=1)\n        scale = max(4e-4, 1.5 * np.median(residual))\n  ",
+      "cd /holdout_task && python3 -I -B test_dag_candidate.py && python3 -I -B - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\n\ndef load(name):\n    spec = importlib.util.spec_from_file_location(name, f'/holdout_task/{name}.py')\n    mod = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(mod)\n    return mod\n\n\na, b = load('node_02'), load('node_00')\nwith open('public_batch.pkl', 'rb') as f:\n    study = pickle.load(f)[0]['study']\nu, v = (study['panel_a'][k] for k in ('u', 'v'))\ncoef = a._fit_forward(u, v)\nx = np.vstack((study['train']['x'], study['test']['x']))\nref = a.",
+      "cd /holdout_task && python3 -I -B - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('node_02', '/holdout_task/node_02.py')\nnode = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(node)\nwith open('public_batch.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\nfor case_id, case in enumerate(cases):\n    study = case['study']\n    print('case', case_id, 'study keys:', sorted(study), 'train keys:', sorted(study['train']), 'test keys:', sorted(study['test']))\n    u, v = (study['panel_a'][k] for k in ('u', 'v'))\n    n = np.roll(u, -"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__dev_m101_c04_batch_00_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/dev_m101_c04_batch_00_solver.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_02.py",
+        "filename": "node_02.py",
+        "bytes": 1873,
+        "sha256": "a3236ed8e0d09b2dd9fc97eb4bc43a6fc3addce297907dea484692c1b8927ecb",
+        "content_addressed_ref": "content_addressed_blobs/a3236ed8e0d09b2dd9fc97eb4bc43a6fc3addce297907dea484692c1b8927ecb.py"
+      },
+      {
+        "declared_root": "/holdout_task/node_00.py",
+        "filename": "node_00.py",
+        "bytes": 335,
+        "sha256": "9db6ba16dd6743363158c6bd381596ca9f06ed27f0911c7e3fc991c009999bac",
+        "content_addressed_ref": "content_addressed_blobs/9db6ba16dd6743363158c6bd381596ca9f06ed27f0911c7e3fc991c009999bac.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_02.py",
+      "/holdout_task/node_00.py"
+    ],
+    "exported_pure_functions": [
+      "_ls",
+      "_affine",
+      "_calibration",
+      "_coordinates",
+      "_cross",
+      "_relaxation",
+      "solve_batch"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "864c62c3bcc1df6c5ac2b831ec24e058ad0b28e0e3221f2f4d6005566d321225",
+      "verified_post_package": true,
+      "verified_turn": 6,
+      "verification_command": "cd /holdout_task && python3 -I -B - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('node_02', '/holdout_task/node_02.py')\nnode = importlib.util.module_from_spec(spec)\nspec.loader",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "864c62c3bcc1df6c5ac2b831ec24e058ad0b28e0e3221f2f4d6005566d321225",
+        "expected_candidate_sha256": "864c62c3bcc1df6c5ac2b831ec24e058ad0b28e0e3221f2f4d6005566d321225",
+        "computed_candidate_sha256": "864c62c3bcc1df6c5ac2b831ec24e058ad0b28e0e3221f2f4d6005566d321225",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_02.py",
+            "bytes": 1873
+          },
+          {
+            "path": "/holdout_task/node_00.py",
+            "bytes": 335
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_864c62c3"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_ls",
+        "code": "def _ls(a, b):\n    return np.linalg.lstsq(a, b, rcond=None)[0]"
+      },
+      {
+        "name": "_affine",
+        "code": "def _affine(x):\n    return np.column_stack((np.ones(len(x)), x))"
+      },
+      {
+        "name": "_calibration",
+        "code": "def _calibration(study):\n    a = study['panel_a']\n    (u, v) = (a['u'], a['v'])\n    (i, j) = np.triu_indices(len(u), 1)\n    coeff = []\n    for (x, y) in zip(u.T, v.T):\n        dx = x[i] - x[j]\n        good = dx != 0\n        gain = np.median((y[i] - y[j])[good] / dx[good])\n        offset = np.median(y - gain * x)\n        err = np.abs(y - offset - gain * x)\n        keep = err <= max(0.001, 5 * np.median(err))\n        coeff.append(_ls(_affine(x[keep]), y[keep]))\n    (offset, gain) = np.asarray(coeff).T\n    b = study['panel_b']\n    mixing = _ls(_affine(b['u']), b['v'])\n    return (offset, gain, mixing)"
+      },
+      {
+        "name": "_coordinates",
+        "code": "def _coordinates(x, calibration):\n    (offset, gain, mixing) = calibration\n    return _affine((x - offset) / gain) @ mixing"
+      },
+      {
+        "name": "_cross",
+        "code": "def _cross(z):\n    return z[:, 0] * z[:, 2] + z[:, 1] * z[:, 3]"
+      },
+      {
+        "name": "_relaxation",
+        "code": "def _relaxation(design, trajectories, times):\n    from scipy.optimize import least_squares\n    (q, r) = np.linalg.qr(design, mode='reduced')\n    projected = q.T @ trajectories\n\n    def basis(log_rates):\n        return -np.expm1(-times[:, None] * np.exp(log_rates))\n\n    def residual(log_rates):\n        b = basis(log_rates)\n        return (b @ _ls(b, projected.T) - projected.T).ravel()\n    result = least_squares(residual, np.log([0.4, 1.8]), bounds=(np.log(0.03), np.log(15.0)))\n    b = basis(result.x)\n    weights = _ls(r, _ls(b, projected.T).T)\n    return weights @ b.T"
+      },
+      {
+        "name": "solve_batch",
+        "code": "def solve_batch(study: dict) -> dict:\n    calibration = _calibration(study)\n    train = study['train']\n    z = _coordinates(train['x'], calibration)\n    z_test = _coordinates(study['test']['x'], calibration)\n    (design, test_design) = (_affine(z), _affine(z_test))\n    w = _ls(np.column_stack((z, _cross(z))), train['y'])\n    y_hat = np.column_stack((z_test, _cross(z_test))) @ w\n    state_pred = test_design @ _relaxation(design, train['traj'], study['eval_times'])\n    final_state = state_pred[:, -1]\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), final_state.mean(), final_state.std()])}"
+      }
+    ]
+  }
+}

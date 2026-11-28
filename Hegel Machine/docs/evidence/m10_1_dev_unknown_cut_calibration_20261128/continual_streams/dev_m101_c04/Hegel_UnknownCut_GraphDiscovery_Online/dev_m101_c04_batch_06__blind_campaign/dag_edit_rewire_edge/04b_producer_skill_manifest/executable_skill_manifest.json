@@ -1,0 +1,145 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_m101_c04_batch_06_a737e652f17f",
+    "source_hash": "a737e652f17f755e65b1268d287192ad06a2e7cd6e36927787c15901cb283996",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_rewire_edge",
+    "task_id": "dev_m101_c04_batch_06__blind_campaign__rewire_edge",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/cross_probe.py",
+        "archived_relpath": "producers/tmp__cross_probe.py",
+        "bytes": 2145,
+        "sha256": "6b2ffd04b8650afadb5628f2beeaa33ff6cd52810b824501d226af7d23cf9fa0"
+      },
+      {
+        "container_path": "/tmp/dag_probe.py",
+        "archived_relpath": "producers/tmp__dag_probe.py",
+        "bytes": 1927,
+        "sha256": "f9ab4c438d30ba63bd50fac010ee638eaf8820f1122fc8b4c07ff71d46923b88"
+      },
+      {
+        "container_path": "/tmp/dag_stress.py",
+        "archived_relpath": "producers/tmp__dag_stress.py",
+        "bytes": 1106,
+        "sha256": "ac065692a1bca19086be8a571ab3191b9c82d6956ac829d2fe0f73670f77bead"
+      },
+      {
+        "container_path": "/tmp/grammar.py",
+        "archived_relpath": "producers/tmp__grammar.py",
+        "bytes": 1537,
+        "sha256": "b5c679d4d1146856b7848839217550de9ef5d42f5376132f527df67990123984"
+      },
+      {
+        "container_path": "/tmp/probe2.py",
+        "archived_relpath": "producers/tmp__probe2.py",
+        "bytes": 2020,
+        "sha256": "1c9783e4c2250f977250e8d42aefe6d9c140c63893f3c2b03fb332e9a6e2b7c1"
+      },
+      {
+        "container_path": "/tmp/readout_probe.py",
+        "archived_relpath": "producers/tmp__readout_probe.py",
+        "bytes": 2030,
+        "sha256": "c2e968385770d60bbca294447176b900fb9c45615946ed856b7775c133ebcbd1"
+      },
+      {
+        "container_path": "/tmp/ridge_readout.py",
+        "archived_relpath": "producers/tmp__ridge_readout.py",
+        "bytes": 1606,
+        "sha256": "c039c8b45f1bc4e82473298e98bb6cdbc8d3256c6295598f4ba3e2e78cbd3a30"
+      },
+      {
+        "container_path": "/tmp/shared.py",
+        "archived_relpath": "producers/tmp__shared.py",
+        "bytes": 3079,
+        "sha256": "6b8e7bcda5035f1f7facd0f582fd568dd31daaf3d542f44485e0a41aa611ead8"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m101_c04_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m101_c04_batch_00_solver.py",
+        "bytes": 2379,
+        "sha256": "8e5e066db2e5ed651242064b84055b93b6496b62ca82bfb40735981939dd8e89"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json test_dag_candidate.py validate_public_schema.py _frozen_nodes/node_00.py _frozen_nodes/node_02.py && python3 - <<'PY'\nimport pickle,numpy as np\nb=pickle.load(open('public_batch.pkl','rb'))\ndef show(x,p=''):\n if isinstance(x,dict):\n  for k,v in x.items(): show(v,p+'/'+str(k))\n else:\n  a=np.asarray(x); print(p,a.shape,a.dtype,str(a.reshape(-1)[:8]))\nshow(b)\nPY",
+      "cd /holdout_task && cat _frozen_nodes/node_02.py _frozen_nodes/node_00.py && sed -n '37,160p' test_dag_candidate.py && python3 - <<'PY'\nimport pickle,numpy as np\nb=pickle.load(open('public_batch.pkl','rb'))\ndef show(x,p=''):\n if isinstance(x,dict):\n  for k,v in x.items(): show(v,p+'/'+str(k))\n elif isinstance(x,(list,tuple)) or isinstance(x,np.ndarray) and x.dtype.kind=='O':\n  print(p,type(x).__name__,len(x))\n  if len(x): show(x[0],p+'/0')\n else:\n  a=np.asarray(x); print(p,a.shape,a.dtype,repr(a.reshape(-1)[:4])[:100])\nshow(b)\nPY",
+      "cat > /tmp/dag_probe.py <<'PY'\nimport runpy,pickle,numpy as np\nfrom itertools import combinations_with_replacement\np='/holdout_task/'\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']\na=runpy.run_path(p+'_frozen_nodes/node_02.py'); b=runpy.run_path(p+'_frozen_nodes/node_00.py')\nup=a['run_node']({'__input__':s}); mix=b['run_node']({'node_02':up})\nu=up['u_tr']; z=mix['z_tr']; T=s['eval_times']; Y=s['train']['y']; R=s['train']['traj']; C=s['panel_c']; B=np.linalg.lstsq(b['_affine'](up['b_u']),up['b_v'],rcond=None)[0]\ndef fit(F,V,n):\n    co=np.linalg.lstsq(F[:n],V[:n],rcond=None)[0]; e=F@",
+      "cd /holdout_task && cat public_asset_index.json; cat >/tmp/readout_probe.py <<'PY'\nfrom dag_probe import *\nfrom itertools import combinations\nfrom scipy.optimize import least_squares\nc=C['u']; v=C['v1']; Q=basis(c,2)\nprint('panel C v2 quadratic coefficients (constant, linear, upper-triangular):\\n',np.round(np.linalg.lstsq(Q,C['v2'],rcond=None)[0],3))\nfor j in range(4):\n D=v[:,j]; print('v1',j)\n for name,g in [('tanh',np.tanh),('sin',np.sin),('atan',np.arctan)]:\n  for dname,x in [('coordinate',c[:,j:j+1]),('projection',c)]:\n   F=basis(c,1); k=x.shape[1]; init=np.r_[np.linalg.lstsq(F,D,rcond=Non",
+      "cat >/tmp/cross_probe.py <<'PY'\nfrom dag_probe import *\nfrom scipy.optimize import minimize_scalar\nfrom itertools import combinations_with_replacement\nn=52\nx=np.c_[u,z]; c=C['u']; cz=b['_affine'](c)@B; cu=(c-B[0])@np.linalg.inv(B[1:]);\nfor label,K in [('panel',c),('train',u)]:\n V=np.c_[C['v1'],C['v2']] if label=='panel' else np.c_[Y,R[:,-1]]; m=19 if label=='panel' else n\n for name,F in [('linear',basis(K,1)),('quad',basis(K,2)),('odd only',np.c_[basis(K,1),basis(K,3)[:,15:]]),('tanh+quad',np.c_[basis(K,2),np.tanh(K)]),('tanh+adjacent',np.c_[np.ones(len(K)),np.tanh(K),K*np.roll(K,-1,axis=1)]),",
+      "cat >/tmp/grammar.py <<'PY'\nfrom dag_probe import *\nfrom scipy.optimize import least_squares\nc=C['u']; q=basis(c,1)\ndef vp(f):\n return lambda k: (f(c,k)@np.linalg.lstsq(f(c,k),v,rcond=None)[0]-v).ravel()\ndef tan(x,k): return np.tanh(x*k)\ndef rat(x,k): return x*x/(1+k*x*x)\nfor v,g in [(C['v1'],tan),(C['v2'],rat)]:\n for scalar in [True,False]:\n  ff=lambda x,k:np.c_[basis(x,1),g(x,k)]\n  k=least_squares(vp(ff),np.full(1 if scalar else 4,2. if g==tan else .2),bounds=(.001,10)).x\n  w=np.linalg.lstsq(ff(c,k),v,rcond=None)[0]; print(g.__name__,np.round(k,4),np.mean(abs(ff(c,k)@w-v))); print(np.round(w",
+      "sed -i 's/sorted(tests)\\[:18\\]/sorted(tests,key=lambda row:row[0])[:18]/' /tmp/grammar.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/grammar.py | tail -23; sed -n '37,150p' /holdout_task/test_dag_candidate.py; cat /holdout_task/_frozen_nodes/node_00.py; cat >/tmp/probe2.py <<'PY'\nfrom dag_probe import *\nfrom scipy.optimize import least_squares\nfrom itertools import combinations\nQ=basis(u,2); n=52; c=C['u']; V=C['v1']\nA=basis(c,1); L=np.linalg.lstsq(A,V,rcond=None)[0]; U,S,Vh=np.linalg.svd(L[1:]); print('panel linear',L.round(3))\nfor name,f,k0 in [('tanh',lambda x,k: np.tanh(k[0]*x),[2.3]),('rational",
+      "cat >/tmp/shared.py <<'PY'\nfrom dag_probe import *\nfrom itertools import combinations_with_replacement,product\nfrom sklearn.linear_model import Lasso\nfrom scipy.optimize import least_squares\nF=basis(u,2); N=52; blocks=[np.arange(52,72),np.arange(0,20),np.arange(20,40),np.arange(40,60)]; folds=[(np.setdiff1d(np.arange(len(u)),v),v) for v in blocks]; X=np.c_[u,z]; L=basis(u,1)\ndef val(A,alpha=0.):\n e=[]\n for t,v in folds:\n  w=np.linalg.lstsq(A[t],Y[t],rcond=1e-9)[0] if not alpha else np.linalg.solve(A[t].T@A[t]+alpha*np.eye(A.shape[1]),A[t].T@Y[t]); e.append(np.mean(abs(A[v]@w-Y[v])))\n return np",
+      "cat >/holdout_task/node_01.py <<'PY'\nimport numpy as np\nfrom itertools import combinations_with_replacement\n\n\ndef _poly(x, low, high):\n    return np.column_stack([np.prod(x[:, j], axis=1) for d in range(low, high + 1)\n                            for j in combinations_with_replacement(range(x.shape[1]), d)])\n\n\ndef run_node(inputs: dict) -> dict:\n    source = inputs['__input__']['train']\n    up, mixed = inputs['node_02'], inputs['node_00']\n    u = np.concatenate((up['u_tr'], up['u_te']))\n    z = np.concatenate((mixed['z_tr'], mixed['z_te']))\n    n = len(up['u_tr'])\n    q = _poly(u, 0, 2)\n    sta",
+      "cat >/holdout_task/node_01.py <<'PY'\nfrom itertools import combinations_with_replacement\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _quadratic(x):\n    return np.column_stack((np.ones(len(x)), x, *(\n        x[:, i] * x[:, j]\n        for i, j in combinations_with_replacement(range(x.shape[1]), 2)\n    )))\n\n\ndef _scalar(q, z, y, q_test, z_test):\n    # Profile out the quadratic and saturation amplitude while fitting the\n    # direction and offset of a single saturation in the mixed coordinates.\n    center, scale = z.mean(axis=0), z.std(axis=0)\n    a = np.column_stack((np.one"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__shared.py",
+      "primary_producer_container_path": "/tmp/shared.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_01.py",
+        "filename": "node_01.py",
+        "bytes": 1877,
+        "sha256": "38c4eebb08134e8fa58f4f4a05f352440918c242cb383594b2eec6aee6a69c41",
+        "content_addressed_ref": "content_addressed_blobs/38c4eebb08134e8fa58f4f4a05f352440918c242cb383594b2eec6aee6a69c41.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_01.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a737e652f17f755e65b1268d287192ad06a2e7cd6e36927787c15901cb283996",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "cat >/holdout_task/node_01.py <<'PY'\nfrom itertools import combinations_with_replacement\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _quadratic(x):\n    return np.column_stack((np.ones(len(x)), x, *(\n        x[:, i] * ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "a737e652f17f755e65b1268d287192ad06a2e7cd6e36927787c15901cb283996",
+        "expected_candidate_sha256": "a737e652f17f755e65b1268d287192ad06a2e7cd6e36927787c15901cb283996",
+        "computed_candidate_sha256": "a737e652f17f755e65b1268d287192ad06a2e7cd6e36927787c15901cb283996",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_01.py",
+            "bytes": 1877
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_a737e652"
+    }
+  },
+  "structure": {
+    "full_producer_count": 9,
+    "reusable_ast_function_closures": []
+  }
+}

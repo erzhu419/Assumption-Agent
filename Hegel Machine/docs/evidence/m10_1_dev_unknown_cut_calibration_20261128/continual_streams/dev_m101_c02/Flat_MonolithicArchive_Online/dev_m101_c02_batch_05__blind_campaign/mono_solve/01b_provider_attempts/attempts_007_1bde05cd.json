@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1bde05cd6bda4ae8b6994176aede0df1",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Flat_MonolithicArchive_Online__dev_m101_c02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:26:06.829501+00:00",
+  "ended_at_utc": "2026-11-28T08:26:47.037748+00:00",
+  "request_sha256": "040ced44a708c84b493b3b8c62c00541048dd063f72e215083f1d8c79acb211b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46198,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27302,
+    "cached_tokens": 9344,
+    "completion_tokens": 1456
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/refine05.py <<'PY'\\nexec(open('/tmp/readouts05.py').read().split('sol=[]')[0])\\nfrom scipy.linalg import qr\\nnp.set_printoptions(precision=5,suppress=True)\\ntimes0=times\\np0=np.array([.57257,2.265422,-.091598,.008623,9.917495,.003997,13.274296])\\n\\ndef trial(kind, nonlinear, joint, ii, jj):\\n def feats(x,p):\\n  d,powr,l,a,f,c,h=p[:7]; z=x**3/(1+d*np.abs(x)**powr)+l*x+a*np.sin(f*x)+c*np.sin(h*x)\\n  if kind=='third': z+=p[7]*np.sin(p[8]*x)\\n  if kind=='even': z+=p[7]*(np.cos(f*x)-1)+p[8]*(np.cos(h*x)-1)\\n  if kind=='fifth': z+=p[7]*x**5\\n  if kind=='cosphase': z+=p[7]*(np.cos(p[8]*x)-1)\\n  return aff(z)\\n def get(p):\\n  a=feats(U,p); op=ls(a,V); zz=feats(X,p)@op\\n  return a@op-V,zz\\n def link(d,p):\\n  h=d@p\\n  return np.c_[np.ones(len(h)),h, {'atan':np.arctan,'tanh':np.tanh,'asinh':np.arcsinh}[nonlinear](h)]\\n def tb(p):return np.c_[np.log1p(times*p[0]),-np.expm1(-times*p[1])]\\n def residual(p,outputs=False):\\n  pr,z=get(p); a=aff(z); d=scalar(z,'paired'); b=tb(p[-2:]); sy=link(d,p[-8:-2]); cy=ls(sy[ii],y[ii]); ct=ls(a[ii],T[ii])@b@np.linalg.inv(b.T@b)\\n  yp=sy@cy; tp=a@ct@b.T\\n  if outputs:return np.sqrt(np.mean(pr**2)),np.mean(abs(yp[jj]-y[jj])),np.mean(abs(tp[jj]-T[jj])),np.std((yp-y)[ii]),np.std((tp-T)[ii]),p,cy\\n  return np.r_[pr.ravel(),joint*(yp-y)[ii],joint*(tp-T)[ii].ravel()]\\n extra={'core':[],'third':[0,19.],'even':[0,0],'fifth':[0],'cosphase':[0,16.]}[kind]\\n elo={'core':[],'third':[-.15,2],'even':[-.15,-.15],'fifth':[-.5],'cosphase':[-.15,2]}[kind]\\n ehi={'core':[],'third':[.15,32],'even':[.15,.15],'fifth':[.5],'cosphase':[.15,32]}[kind]\\n _,z=get(np.r_[p0,extra]); d=scalar(z,'paired'); ini=ls(d[ii],y[ii]); lo=np.r_[[.01,.7,-2,-.2,6,-.2,11],elo,[-100]*6,[.01,.01]]; hi=np.r_[[4,4,2,.2,12,.2,17],ehi,[100]*6,[10,10]]\\n opts=[least_squares(residual,np.r_[p0,extra,scale*ini,[1.4,.7]],bounds=(lo,hi),max_nfev=130) for scale in (.7,1.5,3)]\\n return residual(min(opts,key=lambda q:q.cost).x,True)\\nrng=np.random.default_rng(53); folds=[np.arange(72),rng.permutation(72),rng.permutation(72),rng.permutation(72)]\\nfor kind,linkf,joint in [(k,'atan',w) for k in ('core','third','even','fifth','cosphase') for w in (.25,.7)] + [('core','tanh',.25),('core','asinh',.25)]:\\n results=[trial(kind,linkf,joint,p[:56],p[56:]) for p in folds]\\n print(kind,linkf,joint, np.array([r[:5] for r in results]),'params',results[0][-2], 'link',results[0][-1],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine05.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: linear scalar readout -> H2: paired interaction with a nonlinear scalar link and log/exponential trajectory modes; 56/16 MAEs are 0.00711 for scalar and 0.00520 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"A linear scalar readout of the transformed coordinates and their paired interaction suffices.\",\"empirical_witness\":\"Adding an arctangent link to the same paired features reduced 56/16 scalar MAE from 0.05801 to 0.00711.\",\"causal_blanket_diagnosis\":\"Most remaining scalar error was downstream of the panel transform, in the response link.\",\"sublated_pivot\":\"Fit a profiled paired scalar link and separate temporal modes, comparing operator refinements on multiple splits.\",\"risk_kind\":\"missing_scalar_link\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Unrestricted quadratic scalar readout\",\"rejected_reason\":\"It did not improve the tested arctangent fit on held-out rows despite adding nine interaction coefficients.\"}],\"rationale\":\"Test whether the residual panel mismatch reflects a reproducible missing term. Keep a refinement only if it improves the limiting held-out output without degrading the other.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "28e946c60d5bd1d9317df22f5b0091cf6a2fd066b23a08eff158536cc949dcda",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42737.71,
+      "usage_known": true,
+      "prompt_tokens": 27302,
+      "cached_tokens": 9344,
+      "completion_tokens": 1456
+    }
+  ]
+}

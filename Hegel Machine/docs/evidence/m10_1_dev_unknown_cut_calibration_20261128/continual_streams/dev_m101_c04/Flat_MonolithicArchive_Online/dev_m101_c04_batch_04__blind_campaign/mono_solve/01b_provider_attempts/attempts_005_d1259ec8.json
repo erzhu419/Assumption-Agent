@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d1259ec8aa0646239c546116ab8c5a4d",
+  "call_seq": 5,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:15:28.474988+00:00",
+  "ended_at_utc": "2026-11-28T08:16:08.406318+00:00",
+  "request_sha256": "bfb5e7cbf8c990b42d7084f8f86b2590804d5a7bd2a288f27c06c72af32560cd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38242,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24422,
+    "cached_tokens": 9344,
+    "completion_tokens": 1658
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/graph.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nfrom runpy import run_path\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; X=np.r_[tr['x'],s['test']['x']]; Y=np.c_[tr['y'],tr['traj']]\\nls=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-10)[0]\\na=lambda x:np.c_[np.ones(len(x)),x]\\ncal=run_path('/tmp/hegel_continual_archive/dev_m101_c04_batch_03_solver.py'); offset,gain=cal['_calibrate'](s['panel_a']); x=(X-offset)/gain\\nprint('offset,gain',offset,gain)\\ndef sep(u,d):return np.c_[a(u),*[u**j for j in range(2,d+1)]]\\ndef poly(u,d):return np.c_[np.ones(len(u)),*[np.prod(u[:,i],axis=1) for k in range(1,d+1) for i in combinations_with_replacement(range(u.shape[1]),k)]]\\ndef gate(u,p):return np.sign(u)*np.maximum(abs(u)-p[0],0)**p[1]\\nlib={'linear':lambda u,p:a(u),'sep2':lambda u,p:sep(u,2),'sep3':lambda u,p:sep(u,3),'sep4':lambda u,p:sep(u,4),'poly2':lambda u,p:poly(u,2),'abs':lambda u,p:a(np.c_[u,abs(u)]),'gate':lambda u,p:a(gate(u,p)),'lgate':lambda u,p:a(np.c_[u,gate(u,p)]),'tanh':lambda u,p:a(np.tanh(u*p[0])),'ltanh':lambda u,p:a(np.c_[u,np.tanh(u*p[0])]),'rational':lambda u,p:a(np.c_[u,u/(1+p[0]*u*u)]),'sqrat':lambda u,p:a(np.c_[u,u*u/(1+p[0]*u*u)]),'labs3':lambda u,p:a(np.c_[u,abs(u),u*abs(u),u**3]),'sincos':lambda u,p:a(np.c_[u,np.sin(p[0]*u),np.cos(p[0]*u)])}\\npars={'gate':([.3,1.5],[0,.5],[1,5]),'lgate':([.3,1.5],[0,.5],[1,5]),'tanh':([1],[.1],[10]),'ltanh':([1],[.1],[10]),'rational':([1],[.001],[20]),'sqrat':([1],[.001],[20]),'sincos':([1],[.1],[8])}\\ndef fit(u,v,k):\\n f=lib[k]; p=[]\\n if k in pars:\\n  start,low,high=pars[k]\\n  def res(p):\\n   D=f(u,p); return (D@ls(D,v)-v).ravel()\\n  p=least_squares(res,start,bounds=(low,high),max_nfev=60).x\\n D=f(u,p); c=ls(D,v);return lambda z:f(z,p)@c, p, np.mean(abs(D@c-v))\\nops={}; bank={'x':x}\\nfor tag,panel,out in [('b','panel_b','v'),('c','panel_c','v1'),('d','panel_c','v2')]:\\n u=s[panel]['u'];v=s[panel][out]; scores=[]\\n for k in lib:\\n  g,p,e=fit(u,v,k); errs=[]\\n  for j in range(4):\\n   m=np.arange(len(u))%4!=j; gg,_,_=fit(u[m],v[m],k);errs.append(np.mean(abs(gg(u[~m])-v[~m])))\\n  scores.append((np.mean(errs),k,g))\\n  print(tag,k,'%.6f %.6f'%(e,np.mean(errs)),p)\\n scores.sort(key=lambda t:t[0]); ops[tag]=scores[0][2]\\n for _,k,g in scores[:3]:bank[tag+k]=g(x)\\nfor i,g in ops.items():\\n bank[i]=g(x)\\n for j,h in ops.items():bank[j+i]=h(g(x))\\nbase={k:bank[k] for k in 'xbcd'}\\nfor i,z in base.items():\\n for j,w in base.items():\\n  if i<j:bank[i+'_'+j]=np.c_[z,w]\\nidx=np.arange(72); folds=[(idx[:56],idx[56:])]+[(idx[idx%5!=j],idx[idx%5==j]) for j in range(5)]\\nres=[]\\nfor k,z in bank.items():\\n cs=(z[:,0]*z[:,2]+z[:,1]*z[:,3])[:,None]\\n for label,D in [('linear',a(z)),('cross',a(np.c_[z,cs])),('sep2',sep(z,2)),('poly2',poly(z,2)),('satur',a(np.c_[z,np.tanh(z)]))]:\\n  if D.shape[1]>46:continue\\n  E=[]\\n  for i,j in folds:\\n   e=abs(D[j]@ls(D[i],Y[i])-Y[j]);E.append([e[:,0].mean(),e[:,1:].mean()])\\n  E=np.asarray(E);res.append((k,label,*E[0],*E[1:].mean(0),*E[1:].max(0)))\\nfor col in [4,5]:\\n print('rank',col,'56/16 y, state; avg y,state; worst y,state');\\n for r in sorted(res,key=lambda v:v[col])[:18]:print(r[:2],np.round(r[2:],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (single archived operator) -> H2 (composed or parallel panel operators); best archived 56/16 MAE is 0.17018 for y and 0.13207 for trajectory, from separate solvers.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a full cubic to each auxiliary panel\",\"rejected_reason\":\"There are more cubic terms than panel rows; apparent exact training fit does not identify the operator.\"}],\"rationale\":\"Rank compact panel formulas on held-out panel rows, then compare serial and parallel uses of those operators on separate outcome folds. Low error on only one output would support separate scalar and trajectory paths.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "2cb9b4f82e876e361068df589fb961bec3e657be111cd442d60fe030804b5384",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42443.04,
+      "usage_known": true,
+      "prompt_tokens": 24422,
+      "cached_tokens": 9344,
+      "completion_tokens": 1658
+    }
+  ]
+}

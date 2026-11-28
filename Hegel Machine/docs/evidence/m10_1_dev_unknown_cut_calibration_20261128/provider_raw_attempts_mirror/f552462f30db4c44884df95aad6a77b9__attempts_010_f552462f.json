@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f552462f30db4c44884df95aad6a77b9",
+  "call_seq": 10,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Fixed_TwoStage_Modular_Online__dev_m101_c01_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:29:48.811755+00:00",
+  "ended_at_utc": "2026-11-28T08:30:24.634832+00:00",
+  "request_sha256": "0c72e3ad818e483ce69ce7611e773a1989091cd5b868e79510995004ab7b778b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64953,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38067,
+    "cached_tokens": 9344,
+    "completion_tokens": 1570
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/challenge.py').read_text(); p=p[p.index('def predict'):p.index(\\\"if __name__\\\")]; j=Path('/tmp/joint.py').read_text(); amp=j[j.index('def amplitude'):j.index('def ridge_rat')]; cal=Path('/tmp/probe.py').read_text(); cal=cal[cal.index('def poly'):cal.index(\\\"if __name__\\\")]; sp=Path('/tmp/composed.py').read_text(); sp=sp[sp.index('def spaces'):sp.index('def folds')]; Path('/holdout_task/batch_solver.py').write_text('''\\\"\\\"\\\"Calibrate the inputs and fit separate scalar and time-dependent readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom itertools import combinations_with_replacement as cw\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.optimize import minimize, minimize_scalar\\n\\n'''+cal+p+amp+sp+'''\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x, y, z = (train[k] for k in ('x', 'y', 'traj'))\\n    q = study['test']['x']\\n    t = study['eval_times']\\n    sp = spaces(study, np.r_[x, q])\\n    g1 = group([sp['b']], 'smooth')\\n    g2 = group([sp['ba']], 'mixed')\\n    g3 = group([sp['ab']], 'smooth')\\n    g4 = group([sp['b']], 'mixed')\\n    yh = (predict(x,q,y,g1) + predict(x,q,y,g2)) / 2\\n    _, a, b = amplitude(t, z)\\n    pa = .55*predict(x,q,a,g4) + .45*predict(x,q,a,g3)\\n    residual = z - a[:, None]*b\\n    v = np.linalg.svd(residual, full_matrices=False)[2][0]\\n    pc = predict(x,q,residual@v,g4)\\n    state = pa[:, None]*b + pc[:, None]*v\\n    end = state[:, -1]\\n    return {'y_hat': yh, 'state_pred': state,\\n            'diagnostics_vec': np.array([yh.mean(), yh.std(), end.mean(), end.std()])}\\n''')\\nPY\\ncat >/tmp/ridges.py <<'PY'\\nfrom joint import *\\nfrom scipy.linalg import eigh\\n\\ndef act(a,kind):\\n if kind=='sin': return np.sin(a)\\n if kind=='tanh': return np.tanh(a)\\n if kind=='soft': return a/(1+abs(a))\\n if kind=='cos': return np.cos(a)\\n if kind=='recip': return 1/(1+a*a)\\n return a*np.exp(-a*a/2)\\n\\ndef fit_ridges(x,Y,q,kind,count,reg=.025):\\n n,d=x.shape; D=design(x,2); T=design(q,2); Y=np.asarray(Y).reshape(n,-1)\\n base=np.linalg.lstsq(D,Y,rcond=None)[0]; R=Y-D@base\\n rng=np.random.default_rng(882); eye=np.eye(D.shape[1]+count); scales=np.r_[np.full(D.shape[1],.005),np.full(count,reg)]\\n def f(V,p):\\n  P=p.reshape(count,d+1); return act(V@P[:,1:].T+P[:,0],kind)\\n def fun(p,ret=False):\\n  F=np.c_[D,f(x,p)]; W=np.linalg.lstsq(np.r_[F,scales*eye],np.r_[Y,np.zeros((len(eye),Y.shape[1]))],rcond=None)[0]\\n  if ret:return np.c_[T,f(q,p)]@W\\n  return np.r_[(F@W-Y).ravel(),(scales[:,None]*W).ravel(),.004*p]\\n starts=[rng.normal(0,scale,(count,d+1)).ravel() for scale in [0.6,1.0,1.5,1.8] for _ in range(3)]\\n fs=sorted((least_squares(fun,p,bounds=(-5,5),max_nfev=110,ftol=1e-6) for p in starts),key=lambda f:f.cost)\\n return np.mean([fun(f.x,True) for f in fs[:2]],axis=0),np.sqrt(np.mean(fs[0].fun[:Y.size]**2)),fs[0].x\\n\\nif __name__=='__main__':\\n for i,j in ss:\\n  r,a,b=amplitude(t,z[i]); R=z[i]-a[:,None]*b; v=np.linalg.svd(R,full_matrices=False)[2][0]\\n  for kind in ['sin','tanh','soft','cos','recip','gauss']:\\n   for k in [1,2,3]:\\n    pred,err,pars=fit_ridges(x[i],y[i],x[j],kind,k); print(kind,k,round(err,5),round(abs(pred[:,0]-y[j]).mean(),5),np.round(pars,2) if i[0]==0 and len(j) and j[0]==56 else '',end='; ')\\n   print(flush=True)\\n  print('---',flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ridges.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated kernel ensemble → H2 sparse nonlinear projection readout; the current blend reached fixed-split MAEs of 0.03313 scalar and 0.00644 trajectory, and worst-slice MAEs of 0.05148 and 0.01315.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Feed inferred trajectory amplitudes into the scalar readout\",\"rejected_reason\":\"Even partial coupling increased scalar error across all six holdouts.\"}],\"rationale\":\"Save the measured ensemble as a working artifact. Test projection nonlinearities against it to distinguish a compact scalar law from a fit that only lowers training error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "3ebd38cb706cf4fccbdd75a94f99c34851bf2bd5fb7cfae6a735b84e7d8fc468",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40969.92,
+      "usage_known": true,
+      "prompt_tokens": 38067,
+      "cached_tokens": 9344,
+      "completion_tokens": 1570
+    }
+  ]
+}

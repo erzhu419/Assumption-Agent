@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "96390bec72164168aacabf99b68e1234",
+  "call_seq": 4,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Fixed_TwoStage_Modular_Online__dev_m101_c02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:49:39.520015+00:00",
+  "ended_at_utc": "2026-11-28T08:50:15.418841+00:00",
+  "request_sha256": "b5fa4ac3107232a7954e82ac39d94015a93c6a46508b2242dd92cf797f095dbf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33240,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24707,
+    "cached_tokens": 9344,
+    "completion_tokens": 1552
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/maps.py <<'PY'\\nfrom probe import s,ls,poly\\nimport numpy as np\\nfrom scipy.optimize import lsq_linear,least_squares,minimize_scalar\\n\\ndef bias(x):return np.c_[np.ones(len(x)),x]\\ndef calfit(s):\\n p=s['panel_a'];u=p['u'];v=p['v'];g=np.max(np.abs(v-u),axis=1)<2;u=u[g]; v=v[g];z=np.roll(u,-1,axis=1)\\n return np.array([ls(np.c_[np.ones(len(u)),u[:,j],z[:,j],u[:,j]*z[:,j],u[:,j]**3],v[:,j]) for j in range(4)]).T\\n\\ndef cal(x,c):\\n z=np.roll(x,-1,axis=1);return c[0]+c[1]*x+c[2]*z+c[3]*x*z+c[4]*x**3\\n\\ndef inv(x,c):\\n z=x.copy();j=np.arange(4)\\n for _ in range(12):\\n  J=np.zeros((len(z),4,4));J[:,j,j]=c[1]+c[3]*np.roll(z,-1,axis=1)+3*c[4]*z*z;J[:,j,(j+1)%4]=c[2]+c[3]*z\\n  z-=np.linalg.solve(J,(cal(z,c)-x)[...,None])[...,0]\\n return z\\n\\nfuncs={'sin':np.sin,'tanh':np.tanh,'sinh':np.sinh,'cos':np.cos,'cosh':np.cosh,'atan':np.arctan,'cubic':lambda x:x**3,'sin2':lambda x:np.sin(x)**2,'tanh2':lambda x:np.tanh(x)**2,'sq':lambda x:x*x,'sin_cubed':lambda x:np.sin(x)**3,'tanh_cubed':lambda x:np.tanh(x)**3}\\n\\ndef fitpanel(u,v):\\n ranks=[]\\n for name,fn in funcs.items():\\n  for lin in [False,True]:\\n   def design(x,k):return bias(np.c_[x,fn(k*x)] if lin else fn(k*x))\\n   def err(k):\\n    f=design(u,k); return np.mean((f@ls(f,v)-v)**2)\\n   grid=np.linspace(.12,6,55); scores=np.array([err(k) for k in grid]);i=scores.argmin();r=minimize_scalar(err,bounds=(grid[max(i-1,0)],grid[min(i+1,len(grid)-1)]),method='bounded');k=r.x\\n   f=design(u,k); coef=ls(f,v); H=np.sum(np.linalg.qr(f,mode='reduced')[0]**2,axis=1); cv=np.mean(np.abs((f@coef-v)/(1-H[:,None])));ranks.append((cv,name,lin,k,r.fun,lambda x,d=design,k=k,c=coef:d(x,k)@c))\\n return sorted(ranks,key=lambda q:q[0])\\n\\nif __name__=='__main__':\\n maps={};c=calfit(s);print('cal',c)\\n for pn,vn in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n  p=s[pn];rs=fitpanel(p['u'],p[vn]); print(pn,vn,[r[:5] for r in rs[:6]]);maps[vn]=rs[0][-1]\\n tr=s['train'];x=tr['x'];t=s['eval_times'];T=tr['traj'];Y=tr['y']; non=np.linalg.svd(T,full_matrices=False)[2][0];\\n for name,fun in [('exp',lambda t,k:-np.expm1(-k*t)),('tanh',lambda t,k:np.tanh(k*t)),('rat',lambda t,k:t/(1+k*t))]:\\n  def obj(k):\\n   b=fun(t,k)[:,None];return np.std(T.T-b@ls(b,T.T))\\n  r=minimize_scalar(obj,bounds=(.001,5),method='bounded');print('time',name,r.x,r.fun)\\n names={'raw':x,'inv':inv(x,c),'fwd':cal(x,c)}; out=[]\\n for name,X in names.items():\\n  print(name,'range',X.min(),X.max())\\n  for op in ['', 'v','v1','v2','v:v1','v:v2','v1:v2','v1:v','v2:v']:\\n   z=X\\n   for o in op.split(':') if op else []:z=maps[o](z)\\n   for n,F in [('lin',bias(z)),('sq',poly(z,2)[0]),('sin',bias(np.sin(z))),('tanh',bias(np.tanh(z))),('lin+tanh',bias(np.c_[z,np.tanh(z)]))]:\\n    coef=ls(F[:56],np.c_[Y,T][:56]);e=np.abs(F[56:]@coef-np.c_[Y,T][56:]).mean(axis=0);out.append((e[0],e[1:].mean(),name,op,n))\\n print('top y',sorted(out)[:15]);print('top traj',sorted(out,key=lambda v:v[1])[:15])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/maps.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (affine transfer) -> H2 (invert the recovered cyclic cubic calibration and identify auxiliary links); archived 56/16 MAEs are 0.3024 for y and 0.3718 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The calibration coefficients identify a cyclic polynomial. Test both directions and compare candidate auxiliary compositions on the 56/16 split; if the regular panel links fail their own leave-one-out checks, refine those links before rejecting the compositions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "135a60fac358bf4f90b16439d92e06e0c5b02aac86bca0b61ed28970b9849fc1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41093.6,
+      "usage_known": true,
+      "prompt_tokens": 24707,
+      "cached_tokens": 9344,
+      "completion_tokens": 1552
+    }
+  ]
+}

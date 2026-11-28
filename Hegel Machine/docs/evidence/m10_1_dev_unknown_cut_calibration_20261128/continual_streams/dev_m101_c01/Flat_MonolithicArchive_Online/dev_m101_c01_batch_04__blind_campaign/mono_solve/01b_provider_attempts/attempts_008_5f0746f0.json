@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5f0746f0fb45481186d4e757734398f9",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:09:13.743479+00:00",
+  "ended_at_utc": "2026-11-28T08:09:39.388723+00:00",
+  "request_sha256": "f57a4755f1c039249ac8fd94db9df36c56be27a219ebd2220278906384d50ee7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49129,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31361,
+    "cached_tokens": 9344,
+    "completion_tokens": 939
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/rational.py <<'PY'\\nexec(open('/tmp/structure.py').read().split('for k in')[0])\\nfrom sklearn.model_selection import KFold\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\nF=[(np.arange(56),np.arange(56,72)),*KFold(5,shuffle=True,random_state=12).split(x)]\\nP=poly(x,2); X=poly(x,1); D=cdist(x,x,'sqeuclidean'); K=P@P.T+np.exp(-D/2)\\n\\ndef structural(i,j,b,kind):\\n p=P[i]; w=X[i]; q=b[i]; best=None\\n for v in [np.zeros(5)]+[np.eye(5)[k]*.6 for k in range(5)]+[np.random.default_rng(k).normal(0,.5,5) for k in range(5)]:\\n  def design(p,w,h):\\n   a=w@h\\n   if kind=='rat':return p/(1+a*a)[:,None]\\n   if kind=='ratplus':return np.c_[p,w/(1+a*a)[:,None]]\\n   if kind=='ratquad':return np.c_[w,p/(1+a*a)[:,None]]\\n   if kind=='tanh':return np.c_[p,np.tanh(a)]\\n   if kind=='sin':return np.c_[p,np.sin(a)]\\n   if kind=='switch':return np.c_[p,np.abs(a)]\\n  def err(h):\\n   A=design(p,w,h); return np.r_[A@fit(A,q)-q,.001*h]\\n  o=least_squares(err,v,bounds=(-8,8),max_nfev=150)\\n  if best is None or o.cost<best.cost:best=o\\n h=best.x; A=design(p,w,h); return design(P[j],X[j],h)@fit(A,q),h,np.sqrt(2*best.cost/len(i))\\nfor kind in ['rat','ratplus','ratquad','tanh','sin','switch']:\\n out=[]\\n for i,j in F:\\n  v,h,r=structural(i,j,y,kind); out.append(np.mean(abs(v-y[j])))\\n print(kind,np.round(out,5),'last params',h.round(3),r,flush=True)\\ni,j=F[0]; yh=K[j[:,None],i]@solve(K[i[:,None],i]+.001*np.eye(len(i)),y[i],assume_a='pos');print('readout 56/16 errors by example:'); print(np.c_[x[j],y[j],yh,y[j]-yh].round(4));\\nr=y-P@fit(P,y); ix=np.argsort(abs(r))[-12:];print('quadratic tails');print(np.c_[ix,x[ix],y[ix],r[ix]].round(3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rational.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 separable panel compositions → H2 compact nonlinear readout; five-fold worst MAE remains 0.04117 for readout and 0.00662 for the leading state mode in trajectory units.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the panel-C composition\",\"rejected_reason\":\"Its calibration fit improved, but its held-out readout and state errors did not beat the existing candidates.\"}],\"rationale\":\"Test whether the readout error comes from a missing rational or ridge term. Keep a structural candidate only if its fold-local fit improves on the kernel baseline.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "e27572d2a234d8bc9dd1f496e32478dedf10cff952978c11eabe734576c7f3a9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28061.06,
+      "usage_known": true,
+      "prompt_tokens": 31361,
+      "cached_tokens": 9344,
+      "completion_tokens": 939
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "35e942d87ca6488ba768a7bc88d244ee",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c02_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:02:49.336431+00:00",
+  "ended_at_utc": "2026-11-28T08:03:14.204520+00:00",
+  "request_sha256": "e87df621c1f2d70f08ba0e17673f0d6483fd9a7d0c25ac0150529764a5b180d8",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 53911,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31361,
+    "cached_tokens": 5504,
+    "completion_tokens": 897
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\ndef load(name):\\n    spec = importlib.util.spec_from_file_location(name.rsplit('/', 1)[-1], root + name + '.py')\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod.run_node\\n\\nf0, f1, f2 = map(load, ('_frozen_nodes/node_00', 'node_01', 'node_02'))\\nwith open(root + 'public_batch.pkl', 'rb') as file:\\n    s = pickle.load(file)[0]['study']\\nrows = np.arange(len(s['train']['y']))\\nblocks = np.array_split(rows, 6)\\n\\ndef score(held, **panels):\\n    train = dict(s['train'])\\n    keep = ~np.isin(rows, held)\\n    for key in ('x', 'y', 'traj'):\\n        train[key] = train[key][keep]\\n    study = dict(s, train=train, test={'x': s['train']['x'][held]}, **panels)\\n    raw = f0({'__input__': study})\\n    mapped = f1({'node_00': raw})\\n    out = f2({'__input__': study, 'node_01': mapped})\\n    y, t = out['y_hat'], out['state_pred']\\n    np.testing.assert_allclose(out['diagnostics_vec'], [y.mean(), y.std(), t[:, -1].mean(), t[:, -1].std()])\\n    return np.mean(abs(y-s['train']['y'][held])), np.mean(abs(t-s['train']['traj'][held]),axis=0)\\n\\ndef report(name, scores):\\n    y, t = zip(*scores)\\n    t = np.array(t)\\n    print(f'{name}: worst scalar MAE={max(y):.6f}, worst trajectory block MAE={t.mean(axis=1).max():.6f}, worst block-by-horizon MAE={t.max():.6f}', flush=True)\\n    assert max(y) < .035 and t.max() < .035\\n\\ndef drop(panel, i):\\n    return {key: np.delete(v, i, axis=0) for key, v in panel.items()}\\n\\nreport('Six held-out blocks', [score(held) for held in blocks])\\nb, c = s['panel_b'], s['panel_c']\\nreport('Calibration row deletion', [score(blocks[i % len(blocks)], panel_b=drop(b, i), panel_c=drop(c, (5*i+1) % len(c['u']))) for i in range(len(b['u']))])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Shared linear readout → separate quadratic scalar and rank-two Panel B/C trajectory readouts; verified public MAEs are 0.009586 and 0.016208, but final stress-slice metrics were not returned.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The last receipt confirms the official split but contains no stress output. Run the saved nodes directly to detect block-level, horizon-specific, or calibration-row sensitivity without rerunning the settled official check.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c9df0830a25a62f3eba791a708c2fd44b4f634e97168022663dcc0f51f123cdf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27240.03,
+      "usage_known": true,
+      "prompt_tokens": 31361,
+      "cached_tokens": 5504,
+      "completion_tokens": 897
+    }
+  ]
+}

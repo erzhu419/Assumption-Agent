@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "094f27099f8442c08f8cdeae74b61933",
+  "call_seq": 4,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:28:10.631687+00:00",
+  "ended_at_utc": "2026-11-28T08:28:35.283197+00:00",
+  "request_sha256": "0eab4ba6005669422a46a9be0c5a65de90c0ed345dd547e973a76fc02e0a4c71",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 28946,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20651,
+    "cached_tokens": 9344,
+    "completion_tokens": 925
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"for f in /tmp/hegel_continual_archive/*_{02,03,04}_solver.py; do echo ===$f; grep -n -E '^def |lambda|telemetry|return |bounds=' \\\"$f\\\"; done; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle,glob,importlib.util,itertools\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=56\\ncv=dict(s,train={k:v[:n] if k!='summary' else v for k,v in tr.items()},test={'x':tr['x'][n:]})\\ndef load(f):\\n sp=importlib.util.spec_from_file_location('m',f); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m); return m\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*_solver.py')):\\n try:\\n  p=load(f).solve_batch(cv); print(f[-12:],*[round(np.mean(abs(p[j]-tr[k][n:])),5) for j,k in [('y_hat','y'),('state_pred','traj')]])\\n except Exception as e: print(f[-12:],e)\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef ls(x,y):return np.linalg.lstsq(x,y,rcond=None)[0]\\na=s['panel_a']; u,v=a['u'],a['v']; f=aff(u); keep=np.ones(len(u),bool)\\nfor _ in range(4):\\n w=ls(f[keep],v[keep]); err=np.linalg.norm(f@w-v,axis=1); keep=err<np.sort(err)[40]+1e-10\\nprint('A affine',w,'errors',np.round(np.sort(err),4)); print('telemetry',s['telemetry_vec']); print('traj sv',np.linalg.svd(tr['traj'],compute_uv=False)); print('traj V',np.linalg.svd(tr['traj'],full_matrices=False)[2][:3]); print('y/state corr',np.corrcoef(np.c_[tr['y'],tr['traj']].T)[0]); print('train summary',tr['summary']);\\nfor name in ('panel_b','panel_c'):\\n p=s[name]; u=p['u'];\\n for k,v in p.items():\\n  if k=='u':continue\\n  for g in [u,np.tanh(u),np.sin(u),np.sign(u)*np.maximum(abs(u)-.35,0)**1.5,np.c_[u,u**2,u**3],np.c_[u,u**2,np.array([u[:,i]*u[:,j] for i,j in itertools.combinations(range(4),2)]).T]]:\\n   f=aff(g); print(name,k,g.shape[1],round(np.sqrt(np.mean((f@ls(f,v)-v)**2)),6),end='; ')\\n  print()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archive gate) -> H2 (calibration, operator, and readout isolated by stage); gate 56/16 MAEs are 0.456 for y and 0.306 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Transplant one archived solver wholesale\",\"rejected_reason\":\"Comparing scalar and trajectory errors separately tests whether one solver transfers or whether the two paths require different operators.\"}],\"rationale\":\"Compare archived solvers on the same split, then inspect panel residuals and trajectory singular values to distinguish a calibration mismatch from a missing operator or temporal basis.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d44be1a5a2615cffa54e5735f92a86d6011297943a4d00480b71b39f7942143b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27224.33,
+      "usage_known": true,
+      "prompt_tokens": 20651,
+      "cached_tokens": 9344,
+      "completion_tokens": 925
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "060883b7c8484d859babd97947f82b94",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:29:48.542760+00:00",
+  "ended_at_utc": "2026-11-28T08:30:19.312693+00:00",
+  "request_sha256": "89f0e5990217769faec313b2a24996534da114a1dec75dd8d459130610ef95cf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50213,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29912,
+    "cached_tokens": 9344,
+    "completion_tokens": 1200
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/scalar.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; y=s['train']['y']; T=s['train']['traj']; z=np.load('/tmp/stages.npz')['b']; n=56\\nP=np.array(list(itertools.combinations_with_replacement(range(4),2))); Q=np.prod(z[:,P],axis=2); F=np.c_[np.ones(len(z)),z,Q]; U=np.c_[np.ones(len(z)),z]\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef mat(c):\\n m=np.zeros((4,4)); i,j=P.T; m[i,j]=m[j,i]=c/(1+(i!=j));return m\\nD=np.linalg.svd(F[:n],full_matrices=False); resid=y[:n]-F[:n]@ls(F[:n],y[:n]); G=np.prod(z[:,list(itertools.combinations_with_replacement(range(4),3))],axis=2); w=ls(np.c_[F[:n],G[:n]],y[:n]); print('cubic coefficients',np.round(w[15:],4)); print('quadratic y eig', np.linalg.eigh(mat(w[5:15]))[0]); print('quadratic state eigvectors',np.linalg.eigh(mat(ls(F[:n],T[:n])[5:,-1]))); print('state vs y quadratic correlation', np.corrcoef(ls(F[:n],T[:n])[5:,-1],w[5:15])[0,1]); print('noise y residual order',np.sort(abs(resid))[-8:]);\\nfuncs={ 'sin':lambda a:np.sin(a),'tanh':np.tanh,'atan':np.arctan,'softsat':lambda a:a/np.sqrt(1+a*a),'rat':lambda a:a/(1+a*a),'exp':lambda a:np.exp(np.clip(a,-15,15)), 'cos':np.cos,'sinh':lambda a:np.sinh(np.clip(a,-15,15)) }\\nrng=np.random.default_rng(13); v=rng.normal(size=(12,4)); v=np.r_[np.eye(4),ls(F[:n],y[:n])[None,1:5],v]; v/=np.linalg.norm(v,axis=1,keepdims=True)\\nfor name in [*funcs,'divide','linear_divide','quad_divide']:\\n mode=0 if name in funcs else {'divide':1,'linear_divide':2,'quad_divide':3}[name]\\n def basis(p):\\n  if mode==3:\\n   q=p[0]+Q@p[1:];return F/(1+q[:,None]**2)\\n  a=U@p\\n  if mode==1:return F/(1+a[:,None]**2)\\n  if mode==2:return np.c_[F,U/(1+a[:,None]**2)]\\n  return np.c_[F,funcs[name](a)]\\n def res(p):\\n  a=basis(p)[:n];return a@ls(a,y[:n])-y[:n]\\n starts=[np.r_[bias,g*k] for g in v for bias,k in [(0.,.8),(.3,1.8)]] if mode!=3 else [np.r_[.2,rng.normal(0,.25,10)] for _ in range(12)]\\n fits=[least_squares(res,p,max_nfev=85) for p in starts]; fit=min(fits,key=lambda f:f.cost); a=basis(fit.x); w=ls(a[:n],y[:n]); err=a@w-y\\n print(name, 'MAEs',*(round(np.mean(abs(e)),6) for e in [err[:n],err[n:]]),'p',np.round(fit.x,4),'amp',np.round(w[-1],4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/scalar.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (generic cubic scalar) -> H2 (quadratic readout with a compact nonlinear correction or rational gate); 56/16 MAEs are 0.03708 for cubic scalar and 0.00522 for quadratic trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a full quartic\",\"rejected_reason\":\"It interpolates the fitting rows but worsens scalar MAE to at least 0.08696 on the held-out rows.\"}],\"rationale\":\"Inspect the cubic interaction pattern and compare compact nonlinear corrections against the cubic baseline. Keep a candidate only if it improves prediction on rows excluded from the fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "69795957f008b592b67617c98ca4790f3abaa35d902d29eaa46fbb6d9924aaed",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33304.72,
+      "usage_known": true,
+      "prompt_tokens": 29912,
+      "cached_tokens": 9344,
+      "completion_tokens": 1200
+    }
+  ]
+}

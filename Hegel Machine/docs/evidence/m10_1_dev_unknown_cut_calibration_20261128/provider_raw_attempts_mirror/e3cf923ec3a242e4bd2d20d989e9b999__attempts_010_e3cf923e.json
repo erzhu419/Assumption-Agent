@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e3cf923ec3a242e4bd2d20d989e9b999",
+  "call_seq": 10,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:04:04.823293+00:00",
+  "ended_at_utc": "2026-11-28T08:04:38.610591+00:00",
+  "request_sha256": "efaf9f6c18240077e232e3310e431dc4b8c02349a18e703a8ebbb86260f44392",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69581,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39419,
+    "cached_tokens": 9344,
+    "completion_tokens": 1327
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/coupled.py <<'PY'\\nfrom operators import *\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\nimport sys\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as bs\\nd=S['train']; x=d['x']; y=d['y']; z=d['traj']; t=S['eval_times']; n=len(x)\\nprint('times',t,'telemetry',S['telemetry_vec'],'summary',d['summary'])\\nrng=np.random.default_rng(773); sets=[np.arange(56,72)]+[rng.permutation(n)[:16] for _ in range(8)]+[np.argsort(abs(x[:,j]))[-16:] for j in range(4)]+[np.argsort(np.linalg.norm(x-x[np.argmax(abs(x[:,j]))],axis=1))[:16] for j in range(4)]\\nf=bs.quadratic(x); P=f@f.T; D=cdist(x,x,'sqeuclidean'); dr,iv=bs.panel_coordinates(S,x); K=P+np.exp(-D/(2*1.6**2))+.2*bs.additive_kernel(iv,1.5); L=P+.03*bs.additive_kernel(dr,.45); K0=L+.1*np.exp(-D/(2*1.1**2)); K1=L+np.exp(-D/(2*1.6**2)); values={}\\nfor te in sets:\\n tr=np.setdiff1d(np.arange(n),te); b=bs.temporal_basis(t,z[tr]); a=ls(b,z[tr].T).T\\n fn=lambda g,e:g[np.ix_(te,tr)]@solve(g[np.ix_(tr,tr)]+e*np.eye(len(tr)),np.eye(len(tr)),assume_a='pos')\\n ka=fn(K,.002); ky=.5*(fn(K0,.0003)+fn(K1,.0003)); ap=ka@a\\n def record(k,p):values.setdefault(k,[]).append(np.mean(abs(p-y[te])))\\n record('baseline',ky@y[tr])\\n for k in ('a','x+a','x*q+a','x*q+a+cross','a+x+quot','a*x+quot'):\\n  def feat(v,m):\\n   if k=='a':return bs.quadratic(m)\\n   if k=='x+a':return np.c_[affine(v),bs.quadratic(m)[:,1:]]\\n   if k=='x*q+a':return np.c_[bs.quadratic(v),bs.quadratic(m)[:,1:]]\\n   if k=='x*q+a+cross':return np.c_[bs.quadratic(v),bs.quadratic(m)[:,1:],(v[:,:,None]*m[:,None,:]).reshape(len(v),-1)]\\n   if k=='a+x+quot':return np.c_[affine(v),bs.quadratic(m)[:,1:],affine(v)/(1+m[:,0,None]**2),affine(v)/(1+m[:,1,None]**2)]\\n   return np.c_[affine(v),bs.quadratic(m)[:,1:],(v[:,:,None]*m[:,None,:]).reshape(len(v),-1),affine(v)/(1+m[:,0,None]**2),affine(v)/(1+m[:,1,None]**2)]\\n  F=feat(x[tr],a); Ft=feat(x[te],ap)\\n  for l in (.001,.03,.2):\\n   coef=solve(F.T@F+l*np.eye(F.shape[1]),F.T@y[tr],assume_a='pos'); e=y[tr]-F@coef\\n   record((k,l,'direct'),Ft@coef)\\n   record((k,l,'residual'),Ft@coef+ky@e)\\n   if te[0]==56 and l==.001:print(k,'scalar train rms',np.sqrt(np.mean(e*e)))\\nfor k,v in sorted(values.items(),key=lambda q:np.mean(q[1][:9])+.25*np.mean(q[1][9:]))[:18]:print(k,np.round([v[0],np.mean(v[1:9]),max(v[1:9]),np.mean(v[9:]),max(v[9:])],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/coupled.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: independent scalar and trajectory readouts → H2: test a scalar readout that uses predicted trajectory modes; the verified candidate’s worst corner-neighborhood MAEs are 0.14861 scalar, 0.01628 trajectory, and 0.03563 terminal.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit the verified kernel candidate now\",\"rejected_reason\":\"It improves on the archive at the 56/16 gate, but the boundary errors leave room for a shared-state readout to improve extrapolation.\"}],\"rationale\":\"Fit candidate scalar readouts on training trajectories but evaluate using only predicted modes. Keep the existing solver unless the coupled readout improves both the reference split and the extrapolation slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e7e2f83851fade7f7d1adb7c14627d2e4391ce2e7f13bd7236ae1832e08ee382",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36262.2,
+      "usage_known": true,
+      "prompt_tokens": 39419,
+      "cached_tokens": 9344,
+      "completion_tokens": 1327
+    }
+  ]
+}

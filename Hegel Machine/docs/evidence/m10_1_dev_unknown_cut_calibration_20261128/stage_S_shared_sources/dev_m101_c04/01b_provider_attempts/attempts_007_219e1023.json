@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "219e1023783049ee9cf9e1310fe3736a",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__stageS__dev_m101_c04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:52:37.400532+00:00",
+  "ended_at_utc": "2026-11-28T07:53:00.899807+00:00",
+  "request_sha256": "a2abae8896a0e13aaaefb01ac3125481a30ba70b4ccb5e8c5b694ba709268993",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45740,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30060,
+    "cached_tokens": 5504,
+    "completion_tokens": 881
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nexec(open('/tmp/check_candidate.py').read().split('ys={')[0])\\n# The test set extends furthest along calibrated coordinates 0 and 1.\\nsplits += [(f'extrap{i}',np.argsort(z[:,i])[-8:]) for i in (0,1)]\\nsplits += [('leverage',np.argsort(np.sum((S@np.linalg.inv(S.T@S))*S,axis=1))[-12:])]\\nmethods=['affine','shared','half_intercept','zero_intercept','fixed18_no_intercept']\\nerrors={k:[] for k in methods}; trajectory=[]; shadow=[]\\nfor name,j in splits:\\n i=np.setdiff1d(np.arange(n),j)\\n out=m.solve_batch({**s,'train':{'x':x[i],'y':y[i],'traj':T[i]},'test':{'x':x[j]}})\\n base=D[j]@m._ls(D[i],y[i]); shared=out['y_hat']; zero=S[j,1:]@m._ls(S[i,1:],y[i]); fixed=z[j]@m._ls(z[i],(y-.18*C)[i])+.18*C[j]\\n for k,h in zip(methods,[base,shared,(shared+zero)/2,zero,fixed]): errors[k].append(np.mean(np.abs(h-y[j])))\\n h=out['state_pred']; trajectory.append(np.abs(h-T[j]).mean(0)); shadow.append(np.abs(h[:,-1]-T[j,-1]).mean())\\nfor k,l in errors.items():\\n e=np.asarray(l); print(k,'mean',e.mean(),'worst',e.max(),splits[e.argmax()][0],'extrapolation and leverage',e[-3:])\\nfor k,a in [('trajectory',np.asarray(trajectory)),('terminal',np.asarray(shadow))]:\\n j=np.unravel_index(a.argmax(),a.shape); print(k,'mean',a.mean(),'worst',a[j],splits[j[0]][0],j[1:])\\nprint('shared versus affine: improved slices',sum(np.asarray(errors['affine'])>errors['shared']),'of',len(splits))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted quadratic and affine trajectories -> H2 calibrated paired curvature and two relaxation modes; the current candidate’s worst held-out MAEs are 0.005588 for the scalar and 0.006304 across trajectory horizons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Remove the scalar intercept immediately\",\n      \"rejected_reason\": \"It lowers the worst error on existing slices, but the test batch extends beyond the training range most along two calibrated coordinates. Their upper tails are the relevant check before changing the model.\"\n    }\n  ],\n  \"rationale\": \"Compare the delivered curvature directly against an affine fit on identical held-out rows, and test whether the simpler intercept variants improve extrapolation where the test inputs extend beyond training. Report terminal-state error separately because it feeds the diagnostics.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "4fd6c7021163afabce48569da3b3443ad1aa8fe5cfe5475cf8b79b2675125563",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25878.89,
+      "usage_known": true,
+      "prompt_tokens": 30060,
+      "cached_tokens": 5504,
+      "completion_tokens": 881
+    }
+  ]
+}

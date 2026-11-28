@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "63bc51e09f64454980c552d1c203a39a",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:03:18.011777+00:00",
+  "ended_at_utc": "2026-11-28T08:04:02.197565+00:00",
+  "request_sha256": "ab5b0381e377d2e13daad55e9fd3946e901c1a20e59c867db048e8ccad02779b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66005,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39111,
+    "cached_tokens": 9344,
+    "completion_tokens": 1973
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\nimport numpy as np\\nfrom scipy.linalg import solve\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef quadratic(x):\\n    i, j = np.triu_indices(x.shape[1])\\n    return np.column_stack((np.ones(len(x)), x, x[:, i] * x[:, j]))\\n\\n\\ndef panel_coordinates(study, x):\\n    a = study['panel_a']\\n    u, v = a['u'], a['v']\\n    design = np.column_stack((np.ones(len(u)), u))\\n    preliminary = np.linalg.lstsq(design, v, rcond=None)[0]\\n    error = np.linalg.norm(v - design @ preliminary, axis=1)\\n    keep = error < 2\\n    u, v = u[keep], v[keep]\\n    du, dv = u - u.mean(0), v - v.mean(0)\\n    gain = (du * dv).sum(0) / (du * du).sum(0)\\n    offset = (v - u * gain).mean(0)\\n    b = study['panel_b']\\n    ub, vb = b['u'], b['v']\\n    mat = np.linalg.lstsq(ub - ub.mean(0), vb - vb.mean(0), rcond=None)[0]\\n    left, values, right = np.linalg.svd(mat)\\n    mat = values.mean() * (left @ right)\\n    shift = vb.mean(0) - ub.mean(0) @ mat\\n    direct = (x * gain + offset - shift) @ np.linalg.inv(mat)\\n    inverse = ((x - offset) / gain - shift) @ np.linalg.inv(mat)\\n    return direct, inverse\\n\\n\\ndef temporal_basis(t, traj):\\n    def basis(p):\\n        return np.column_stack((-np.expm1(-p[0] * t), np.exp(-p[2] * t) * np.sin(p[1] * t)))\\n\\n    def residual(p):\\n        b = basis(p)\\n        return (b @ np.linalg.lstsq(b, traj.T, rcond=None)[0] - traj.T).ravel()\\n\\n    p = least_squares(residual, [0.55, 1.13, 0.18], bounds=([0.02, 0.5, -0.3], [3, 2, 1])).x\\n    return basis(p)\\n\\n\\ndef additive_kernel(w, length):\\n    d = w[:, None, :] - w[None, :, :]\\n    return np.exp(-d**2 / (2 * length**2)).sum(2)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = np.concatenate((train['x'], study['test']['x']))\\n    n = len(train['x'])\\n    f = quadratic(x)\\n    p = f @ f.T\\n    d = cdist(x, x, 'sqeuclidean')\\n    short = 0.1 * np.exp(-d / (2 * 1.1**2))\\n    long = np.exp(-d / (2 * 1.6**2))\\n    direct, inverse = panel_coordinates(study, x)\\n\\n    def predict(k, targets, noise):\\n        alpha = solve(k[:n, :n] + noise * np.eye(n), targets, assume_a='pos')\\n        return k[n:, :n] @ alpha\\n\\n    scalar = p + 0.03 * additive_kernel(direct, 0.45)\\n    y = 0.5 * predict(scalar + short, train['y'], 0.0003)\\n    y += 0.5 * predict(scalar + long, train['y'], 0.0003)\\n    traj = train['traj']\\n    basis = temporal_basis(study['eval_times'], traj)\\n    modes = np.linalg.lstsq(basis, traj.T, rcond=None)[0].T\\n    state = predict(p + long + 0.2 * additive_kernel(inverse, 1.5), modes, 0.002) @ basis.T\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\ncat > /tmp/verify_batch.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nd = s['train']; x = d['x']; y = d['y']; z = d['traj']; n = len(x)\\nrng = np.random.default_rng(2951)\\nsets = [np.arange(56,72)] + [rng.permutation(n)[:16] for _ in range(12)] + [np.argsort(abs(x[:, j]))[-16:] for j in range(4)]\\nfor j in range(4):\\n    sets.append(np.argsort(np.linalg.norm(x - x[np.argmax(abs(x[:,j]))], axis=1))[:16])\\nerrs = []\\nfor te in sets:\\n    tr = np.setdiff1d(np.arange(n), te)\\n    pred = m.solve_batch(dict(s, train={k: d[k][tr] for k in ('x','y','traj')}, test={'x':x[te]}))\\n    e = abs(pred['state_pred'] - z[te]); errs.append([np.mean(abs(pred['y_hat']-y[te])), e.mean(), e[:,-1].mean()])\\ne = np.asarray(errs)\\nfor name,a in [('56/16', e[:1]), ('random',e[1:13]), ('boundaries', e[13:17]), ('corner neighborhoods',e[17:])]:\\n    print(name,'mean',a.mean(0),'worst',a.max(0))\\np = m.solve_batch(s); q = p['y_hat']; zt = p['state_pred']; f = zt[:,-1]\\nassert q.shape == (36,) and zt.shape == (36,8)\\nassert all(np.isfinite(a).all() for a in p.values())\\nnp.testing.assert_allclose(p['diagnostics_vec'],[q.mean(),q.std(),f.mean(),f.std()])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_batch.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: isotropic kernel residuals → H2: separate scalar and trajectory readouts with panel-aligned additive terms; screened scalar and trajectory candidates reached worst random-split MAEs of 0.05518 and 0.00793, respectively.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use one regularization setting for both outputs\",\n      \"rejected_reason\": \"The scalar favors stronger local curvature, while trajectory and terminal-state errors favor a smoother readout.\"\n    }\n  ],\n  \"rationale\": \"Build a complete candidate and test it on fresh random splits and held-out boundary neighborhoods. If the panel-aligned terms fail on those slices, compare against the simpler isotropic kernels before promoting them.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "79398a1a46012b3d970feb10ed06a7e0217547df4cb30486f538f9738bf06e97",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49137.45,
+      "usage_known": true,
+      "prompt_tokens": 39111,
+      "cached_tokens": 9344,
+      "completion_tokens": 1973
+    }
+  ]
+}

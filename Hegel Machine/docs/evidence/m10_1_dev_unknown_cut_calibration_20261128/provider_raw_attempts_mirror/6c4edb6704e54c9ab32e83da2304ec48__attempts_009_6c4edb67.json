@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6c4edb6704e54c9ab32e83da2304ec48",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c01_batch_04__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:10:44.254176+00:00",
+  "ended_at_utc": "2026-11-28T08:11:23.260567+00:00",
+  "request_sha256": "7d641d8904fd569ebb62ff8792884244562d777a2768d6ac6b02c9e8651a35c2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51022,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31825,
+    "cached_tokens": 9344,
+    "completion_tokens": 1593
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/dev_m101_c01_batch_02_solver.py; cat > /tmp/links.py <<'PY'\\nfrom operators import *\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\nnp.set_printoptions(precision=4,suppress=True)\\n_,_,vt=np.linalg.svd(z,full_matrices=False); Y=np.c_[y,z@vt[0]*vt[0,-1]]\\nprint('output ranges',np.quantile(Y,[0,.05,.5,.95,1],axis=0)); print('spearman y vs amp',np.corrcoef(np.argsort(np.argsort(Y,axis=0),axis=0).T))\\ndef cross(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\ndef pol(a,d):return PolynomialFeatures(d).fit_transform(a)\\nB=aff(x)@bb; Br=aff(raw)@bb\\nfor name,U in [('A',x),('B',B),('Br',Br)]:\\n F=pol(U,3); power=PolynomialFeatures(3).fit(U).powers_; co=fit(F,Y); print(name,'cubic coefficients',[(tuple(q),list(np.round(c,3))) for q,c in zip(power,co) if sum(q)==3]);\\nfor tgt in range(2):\\n yy=Y[:,tgt]; results=[]\\n for name,U in [('A',x),('B',B),('Br',Br),('BC1',c1map(B)),('BC2',c2map(B))]:\\n  F=pol(U,2); H=pol(x,2)\\n  for fkey,F0 in [('quadratic',F),('Cmix',np.c_[H,U,c1map(B),c2map(B)]),('Ccross',np.c_[H,cross(B,c2map(B))]),('cubic',pol(U,3))]:\\n   if fkey in ['Cmix','Ccross'] and name!='B':continue\\n   for kind in ['tanh','asinh','rational_norm','rational_axis','rational_index','quadratic_index']:\\n    if fkey=='cubic' and kind not in ['rational_norm','rational_axis']:continue\\n    ee=[]; rr=[]; params=[]\\n    for tr,te in folds:\\n     M=F0[tr]; N=F0[te]; yt=yy[tr]; V=U[tr]; Vt=U[te];\\n     if kind in ['tanh','asinh']:\\n      cen=yt.mean(); lim=max(abs(yt-cen));\\n      def design(p):\\n       off=p[0]+cen; w=p[1]; q=(yt-off)/w\\n       if kind=='tanh': return off,w,np.arctanh(np.clip(q,-.998,.998))\\n       return off,w,np.arcsinh(q)\\n      def pred(p):\\n       off,w,q=design(p); c=fit(M,q); fn=np.tanh if kind=='tanh' else np.sinh; return off+w*fn(np.clip(M@c,-10,10)),off+w*fn(np.clip(N@c,-10,10))\\n      bounds=([-lim*.5,lim*.95 if kind=='tanh' else .03],[lim*.5,lim*20]); ini=[0,lim*1.4 if kind=='tanh' else lim*.6]\\n     else:\\n      def den(p,u):\\n       if kind=='rational_norm':return 1+p[0]*np.sum(u*u,axis=1)\\n       if kind=='rational_axis':return 1+(u*u)@p\\n       l=p[1]+u@p[2:]; return 1+p[0]*l*l\\n      def pred(p):\\n       if kind=='quadratic_index':\\n        l=p[1]+V@p[2:]; lt=p[1]+Vt@p[2:]; a=p[0]*l**4; at=p[0]*lt**4; c=fit(M,yt-a);return M@c+a,N@c+at\\n       d=den(p,V); dt=den(p,Vt); c=fit(M/d[:,None],yt);return (M@c)/d,(N@c)/dt\\n      if kind=='rational_norm': ini=[.2];bounds=([0],[8])\\n      elif kind=='rational_axis': ini=np.full(4,.2);bounds=(np.zeros(4),np.full(4,8))\\n      else:ini=[.2,.01,.4,.3,.2,.1];bounds=([-5 if kind=='quadratic_index' else 0,-2,-2,-2,-2,-2],[8,2,2,2,2,2]);\\n     r=least_squares(lambda p:pred(p)[0]-yt,ini,bounds=bounds,max_nfev=45); a,b0=pred(r.x); ee.append(np.mean(abs(b0-yy[te])));rr.append(np.std(a-yt));params.append(r.x)\\n    results.append((np.mean(ee),max(ee),ee[0],np.mean(rr),name,fkey,kind,params[0]))\\n print('BEST LINKS',tgt); [print(v) for v in sorted(results)[:12]]\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/links.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Compact polynomial interactions → test scalar links and rational modulation; prior y MAE is 0.0226 on the fixed split and 0.0431 on the worst random fold.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The tested polynomial restrictions did not improve the y baseline. If a low-parameter link or denominator improves both held-out metrics with stable parameters, it can replace the flexible readout; otherwise retain the better-validated model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7dafacdc36f4e31ad7544065264f02961920e770afb54c654223a0ef0ee981dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41564.6,
+      "usage_known": true,
+      "prompt_tokens": 31825,
+      "cached_tokens": 9344,
+      "completion_tokens": 1593
+    }
+  ]
+}

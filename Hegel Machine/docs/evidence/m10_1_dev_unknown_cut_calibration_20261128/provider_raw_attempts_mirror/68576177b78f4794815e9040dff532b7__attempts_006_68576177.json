@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "68576177b78f4794815e9040dff532b7",
+  "call_seq": 6,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__stageS__dev_m101_c02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:51:51.928927+00:00",
+  "ended_at_utc": "2026-11-28T07:52:31.967285+00:00",
+  "request_sha256": "2f788ec06211fd3c0d6d1ec3538d7d4417ca5559c4eb87b72d54c049aeb78a8d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37785,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26803,
+    "cached_tokens": 10880,
+    "completion_tokens": 1718
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m101_audit.py <<'PY'\\nimport importlib.util, pickle\\nfrom itertools import combinations, combinations_with_replacement\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\ntr=s['train']; x=m._coordinates(s,tr['x']); y=tr['y']; z=tr['traj']; n=len(x); ids=np.arange(n); base=m._scalar_design(x)\\nq=np.column_stack([x[:,i]*x[:,j] for i,j in combinations_with_replacement(range(4),2)])\\nforms=[(f'x{i}',x[:,i]) for i in range(4)]+[(f'x{i}{sign}x{j}',(x[:,i]+c*x[:,j])/np.sqrt(2)) for i,j in combinations(range(4),2) for c,sign in [(1,'+'),(-1,'-')]]\\nrat=[('none',base)]+[(f'{name}:{a:g}',base/(1+a*f[:,None]**2)) for name,f in forms for a in (.002,.01,.04,.16,.64)]\\npoly=[('tied',base),('all-quadratic',np.c_[np.ones(n),x,q])]+[(f'tied+{i}',np.c_[base,q[:,i]]) for i in range(q.shape[1])]\\ndef pred(d,it,va): return d[va]@m._fit(d[it],y[it])\\ndef select(opts,it):\\n    folds=np.array_split(np.random.default_rng(37).permutation(it),4)\\n    return min(opts,key=lambda a: np.mean([np.mean(abs(y[v]-pred(a[1],np.setdiff1d(it,v),v))) for v in folds]))\\nslices={'last16':[ids[56:]],'blocked':[ids[i:i+16] for i in range(0,n,16)],'radius':[np.argsort(np.linalg.norm(x,axis=1))[-16:]],'tails':[np.argsort(x[:,j])[sl] for j in range(4) for sl in (slice(0,12),slice(-12,None))]}\\nfor name,folds in slices.items():\\n    scores=[]; chosen=[]; horizon=[]; terminal=[]; diag=[]\\n    for va in folds:\\n        it=np.setdiff1d(ids,va); a=select(rat,it); b=select(poly,it); chosen.append((a[0],b[0]))\\n        h=dict(s,train={k:tr[k][it] for k in ('x','y','traj')},test={'x':tr['x'][va]}); r=m.solve_batch(h)\\n        scores.append([np.mean(abs(y[va]-v)) for v in (r['y_hat'],pred(a[1],it,va),pred(b[1],it,va))]); horizon.append(np.mean(abs(z[va]-r['state_pred']),axis=0)); terminal.append(horizon[-1][-1])\\n        e=z[va,-1]; diag.append(abs(r['diagnostics_vec']-[y[va].mean(),y[va].std(),e.mean(),e.std()]))\\n    print(name,'scalar mean/max [base,rational,quadratic]',np.mean(scores,axis=0),np.max(scores,axis=0),'selections',chosen,'state mean/worst/terminal worst',np.mean(horizon),np.max(horizon),np.max(terminal),'diagnostic worst',np.max(diag,axis=0))\\n# Quantify calibration support and whether a single panel point dominates the test features.\\na=s['panel_a']; d=np.max(abs(a['v']-a['u']),axis=1); ref=m._coordinates(s,s['test']['x']); shifts={}\\nfor k in ('panel_a','panel_b'):\\n    panel=s[k]; jx=np.arange(len(panel['u'])); shifts[k]=max(np.max(np.abs(ref-m._coordinates(dict(s,**{k:{j:v[jx!=i] for j,v in panel.items()}}),s['test']['x']))) for i in jx)\\nprint('calibration threshold separation',np.max(d[d<1]),np.min(d[d>=1]),'panel jackknife worst test coordinate change',shifts)\\nprint('study fields',sorted(s),'train fields',sorted(tr),'telemetry shape',s['telemetry_vec'].shape)\\nr=m.solve_batch(s); ntest=len(s['test']['x']); nt=len(s['eval_times']); assert set(r)=={'y_hat','state_pred','diagnostics_vec'}\\nfor k,shape in zip(('y_hat','state_pred','diagnostics_vec'),((ntest,),(ntest,nt),(4,))): assert isinstance(r[k],np.ndarray) and r[k].shape==shape and np.all(np.isfinite(r[k]))\\na=r['y_hat']; b=r['state_pred'][:,-1]; np.testing.assert_array_equal(r['diagnostics_vec'],[a.mean(),a.std(),b.mean(),b.std()]); print('Isolated solver contract and all diagnostics passed')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m101_audit.py && python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated tied-bilinear scalar and two relaxation modes -> H2 retain those terms unless nested holdouts support extra nonlinear structure; current worst scalar and trajectory-timestamp MAE are 0.00563 and 0.00711.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit relay modes, a cohort adjustment, or a Fokker–Planck/HJB operator\",\n      \"rejected_reason\": \"The supplied regression study has no relay or cohort labels, control variables, or density measurements to identify those mechanisms.\"\n    }\n  ],\n  \"rationale\": \"Nested holdouts test whether rational denominators built on individual channels and pairwise sums or differences improve scalar prediction beyond the tied interaction. Panel jackknifing tests whether calibration depends on a single reference point; isolated execution checks both predictions and all four diagnostics.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "8ca390a1e807a2d06363eb47330aa3ce1380ad711bd7042665830c9bcd4675fe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44907.37,
+      "usage_known": true,
+      "prompt_tokens": 26803,
+      "cached_tokens": 10880,
+      "completion_tokens": 1718
+    }
+  ]
+}

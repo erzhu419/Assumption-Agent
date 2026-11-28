@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "70e4715df11e47229525850d8489da7d",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Flat_MonolithicArchive_Online__dev_m101_c02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:03:08.928342+00:00",
+  "ended_at_utc": "2026-11-28T08:03:56.171255+00:00",
+  "request_sha256": "5b6e68fe23095110e7799accb33960672e798c1236456cfc51372c6623f9e33c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60414,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35267,
+    "cached_tokens": 9344,
+    "completion_tokens": 1987
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated panel-B coordinates with separate scalar and temporal readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(z):\\n    return np.column_stack((np.ones(len(z)), z))\\n\\n\\ndef _lstsq(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _fit(study, x, y, traj):\\n    a, b = study['panel_a'], study['panel_b']\\n    u, v = a['u'], a['v']\\n    keep = np.max(np.abs(v-u), axis=1) < 1.0\\n    u, v = u[keep], v[keep]\\n    du = u-u.mean(axis=0)\\n    gain = np.sum(du*(v-v.mean(axis=0)), axis=0)/np.sum(du**2, axis=0)\\n    offset = v.mean(axis=0)-gain*u.mean(axis=0)\\n    w = (x-offset)/gain\\n\\n    def features(q, p):\\n        k, power, linear = p\\n        return _affine(q**3/(1+k*np.abs(q)**power)+linear*q)\\n\\n    def scalar(z):\\n        return np.column_stack((_affine(z), z[:,0]*z[:,2], z[:,1]*z[:,3]))\\n\\n    def profile(p):\\n        panel = features(b['u'], p)\\n        operator = _lstsq(panel, b['v'])\\n        z = features(w, p)@operator\\n        sy, st = scalar(z), _affine(z)\\n        cy = _lstsq(sy, y)\\n        ct = _lstsq(st, traj)\\n        left, value, right = np.linalg.svd(ct, full_matrices=False)\\n        ct = (left[:,:2]*value[:2])@right[:2]\\n        residual = np.concatenate(((panel@operator-b['v']).ravel(), 0.7*(sy@cy-y), 0.7*(st@ct-traj).ravel()))\\n        return residual, operator, cy, ct\\n\\n    bounds = ([0.015, 0.6, -4.0], [5.0, 5.0, 4.0])\\n    fits = [least_squares(lambda p: profile(p)[0], p, bounds=bounds, max_nfev=90)\\n            for p in ([0.5, 2.5, -0.09], [1.3, 2.0, -0.08])]\\n    params = min(fits, key=lambda r: r.cost).x\\n    _, operator, cy, ct = profile(params)\\n    def coordinates(query):\\n        return features((query-offset)/gain, params)@operator\\n    def predict(query):\\n        z = coordinates(query)\\n        return scalar(z)@cy, _affine(z)@ct\\n    return predict, coordinates\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    predict, _ = _fit(study, train['x'], train['y'], train['traj'])\\n    y, state = predict(study['test']['x'])\\n    final = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), final.mean(), final.std()])}\\nPY\\ncat >/tmp/readout101.py <<'PY'\\nexec(open('/tmp/graph101.py').read().split('for key,p,v in')[0])\\nimport sys\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _fit\\nfrom scipy.special import erf\\nfrom itertools import combinations_with_replacement\\n\\ndef cubic(z):return np.column_stack([np.prod(z[:,p],axis=1) for p in combinations_with_replacement(range(4),3)])\\ndef D(z):return np.column_stack([np.prod(z[:,p],axis=1) for p in combinations_with_replacement(range(4),2)])\\nH=lambda z:np.c_[z,np.tanh(z),np.tanh(2*z),np.tanh(4*z),z**3]\\n# Stress inputs in the tails as well as repeat random 56/16 splits.\\nnorm=np.linalg.norm((x-off)/sc,axis=1); order=np.argsort(norm); folds += [(order[:-12],order[-12:]),(order[12:],order[:12])]\\nresults={}; coef=[]\\nfor i,j in folds:\\n predict, coord=_fit(s,x[i],Y[i,0],Y[i,1:]); z=coord(x); base=np.column_stack(predict(x)); E=Y[:,1:]-base[:,1:]; _,dv,T=np.linalg.svd(E[i],full_matrices=False); Q=O(z); target=E[:,1:]@T[0]; coef.append((dv[:2],T[0],L(Q[i],Y[i,1:]@T[0]))); values={'base':base}\\n for kind,B in [('z2',D(z)),('z3',cubic(z)),('z23',np.c_[D(z),cubic(z)]),('w2',D(w if 'w' in globals() else (x-off)/sc)),('znon',H(z)),('w', (x-off)/sc),('pair',z[:,[0,1]]*z[:,[2,3]])]:\\n  B=B-Q@L(Q[i],B[i]); B=B/np.maximum(np.std(B[i],axis=0),1e-9)\\n  for alpha in [0.1,3,20]:\\n   c=np.linalg.solve(B[i].T@B[i]+alpha*np.eye(B.shape[1]),B[i].T@target); values[kind+str(alpha)]=np.c_[base[:,0],base[:,1:]+np.outer(B@c,T[0])]\\n for k,p in values.items():\\n  er=abs(p[j]-Y[j]); results.setdefault(k,[]).append([er[:,0].mean(),er[:,1:].mean(),er[:,-1].mean(),max(er[:,1:].mean(0))]);\\nprint('baseline and best corrections:');\\nfor k in ['base']+sorted(results,key=lambda k: np.mean(results[k],axis=0)[1])[:14]:\\n e=np.array(results[k]); print(k,'56/16',e[0],'ordinary max',e[:6].max(0),'tails',e[6:]);\\nprint('residual sv/time/association',coef[0]);\\n_, coord=_fit(s,x,Y[:,0],Y[:,1:]); z=coord(x); zt=coord(s['test']['x']); print('z range',z.min(0), z.max(0),zt.min(0),zt.max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout101.py\\npython3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"H1 fixed shared panel B warp → H2 jointly calibrated rational warp with two trajectory modes; prior worst split MAEs were 0.0119 for y and 0.0152 for trajectory.\",\n  \"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\"]},\n  \"considered_alternatives\":[{\"option\":\"Add a broad nonlinear readout immediately\",\"rejected_reason\":\"The remaining trajectory residual is concentrated in one mode; test corrections to that mode on held-out rows before adding them to the solver.\"}],\n  \"rationale\":\"Save the strongest tested graph, then check whether nonlinear readouts reduce the dominant residual on ordinary and input-tail splits. Keep the simpler readout unless the improvement survives those splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "a5c658387a29de1bdb6989bcef5ec24c7007bfc22e84e76b4dc3772157d2b387",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49688.39,
+      "usage_known": true,
+      "prompt_tokens": 35267,
+      "cached_tokens": 9344,
+      "completion_tokens": 1987
+    }
+  ]
+}

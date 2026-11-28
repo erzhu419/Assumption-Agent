@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f069fb095d81484eab5d0e71350ea3de",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Flat_MonolithicArchive_Online__dev_m101_c03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:01:22.254760+00:00",
+  "ended_at_utc": "2026-11-28T08:01:45.670834+00:00",
+  "request_sha256": "6781e7911fecf6317dbb3399b1c8ccde265579f20aaa51a6902a4fa71cface32",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46174,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28605,
+    "cached_tokens": 9344,
+    "completion_tokens": 869
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/stress_solver.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; t=s['eval_times']; X=m._design(s,tr['x']); y=tr['y']; T=tr['traj']; ids=np.arange(len(X));\\ncal=m._calibrate(s['panel_a']); z=(tr['x']-cal[0])/cal[1]; radius=np.linalg.norm(z,axis=1); interaction=np.max(abs(X[:,13:]),axis=1)\\nsplits=[('56/16',ids[56:]),('high-radius',np.argsort(radius)[-16:]),('high-interaction',np.argsort(interaction)[-16:])]+[(f'fold{k}',j) for k,j in enumerate(np.array_split(np.random.default_rng(209).permutation(len(ids)),4))];\\nfast=np.r_[5:15]; slow=np.r_[9:14]; full=np.r_[0:15]; ysel=np.r_[0,5:13,14];\\nfor name,J in splits:\\n I=np.setdiff1d(ids,J); K,A=m._kinetics(X[I],T[I],t)\\n def pred(q,z): return X[J][:,q]@m._fit(X[I][:,q],z)\\n base=pred(full,A)@K.T; narrow=np.column_stack((pred(slow,A[:,0]),pred(fast,A[:,1])))@K.T\\n print(name,'y full/narrow',*[round(np.mean(abs(pred(q,y[I])-y[J])),6) for q in [full,ysel]],'traj full/narrow',*[round(np.mean(abs(p-T[J])),6) for p in [base,narrow]],'traj worst horizon full/narrow',*[round(np.max(np.mean(abs(p-T[J]),axis=0)),6) for p in [base,narrow]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (shared full readout) -> H2 (mode-specific sparse readouts); current 56/16 MAEs are 0.004506 for y and 0.004080 for trajectories, with four-fold worst MAEs of 0.007484 and 0.004151.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Remove terms based only on their fitted coefficients\",\"rejected_reason\":\"Correlated features can make individual coefficients misleading; compare the restricted readouts on untouched folds and high-interaction rows before editing.\"}],\"rationale\":\"Hold out the largest calibrated inputs and interactions to detect extrapolation errors that random folds could miss. Compare each output separately and retain the full readout wherever the smaller model does not improve the stressed slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "d16824c617aef992f581da8a5a405fbab80f16d0f4a1df18666356aa9ba8b289",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25882.58,
+      "usage_known": true,
+      "prompt_tokens": 28605,
+      "cached_tokens": 9344,
+      "completion_tokens": 869
+    }
+  ]
+}

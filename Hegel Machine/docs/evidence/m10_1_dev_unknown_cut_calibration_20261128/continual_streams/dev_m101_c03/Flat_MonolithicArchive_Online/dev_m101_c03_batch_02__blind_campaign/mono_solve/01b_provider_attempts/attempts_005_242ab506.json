@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "242ab5067e4740b2af808d4c804a0584",
+  "call_seq": 5,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Flat_MonolithicArchive_Online__dev_m101_c03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:05:01.807983+00:00",
+  "ended_at_utc": "2026-11-28T08:05:49.805180+00:00",
+  "request_sha256": "29a1376ee799be4992ce7792478f1de2bf7462f4fc0d845bf8cb85d6dadd7e04",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41047,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26968,
+    "cached_tokens": 9344,
+    "completion_tokens": 1923
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/A=branch/,$d' /tmp/discover.py > /tmp/refine.py\\ncat >> /tmp/refine.py <<'PY'\\nv=p['v1']\\ndef profile(f, v, orth=True):\\n if not orth: return aff(f)@ls(aff(f),v)-v,None,None\\n fm=f.mean(0); vm=v.mean(0); a=f-fm; b=v-vm\\n h,d,j=np.linalg.svd(a.T@b); m=(h@j)*d.sum()/np.sum(a*a); off=vm-fm@m\\n return f@m+off-v,m,off\\nbase=lambda u,a,k:a*u+np.tanh(k*u)\\nfuncs=[('base',base,[.5,2.3]),('coordinate slopes',lambda u,a,k:np.array(a)*u+np.tanh(k*u),None),('coordinate rates',lambda u,a,k:a*u+np.tanh(np.array(k)*u),None),('shift',lambda u,a,k,c:a*u+np.tanh(k*u+c),[.5,2.3,0]),('cubic',lambda u,a,k,c:base(u,a,k)+c*u**3,[.5,2.3,0]),('quintic',lambda u,a,k,c,d:base(u,a,k)+c*u**3+d*u**5,[.5,2.3,0,0]),('softsign',lambda u,a,k:a*u+k*u/np.sqrt(1+(k*u)**2),[.5,2.3]),('atan',lambda u,a,k:a*u+np.arctan(k*u),[.5,2.3]),('cubic inside',lambda u,a,k,c:a*u+np.tanh(k*u+c*u**3),[.5,2.3,0]),('rational',lambda u,a,k:a*u+u/(1+k*u**2),[.5,1]),('sin plus tanh',lambda u,a,k,c,l:base(u,a,k)+c*np.sin(l*u),[.5,2.3,.01,3]),('tanh plus scaled rational',lambda u,a,k,c,l:base(u,a,k)+c*u/(1+l*u*u),[.5,2.3,.01,1]),('input norm coupling',lambda u,a,k,c:base(u,a,k)+c*u*np.sum(u*u,axis=1)[:,None],[.5,2.3,0])]\\nfor name,fn,q in funcs:\\n if name=='coordinate slopes': fn=lambda u,*p:base(u,np.array(p[:4]),p[4]); q=[.5]*4+[2.3]\\n if name=='coordinate rates': fn=lambda u,*p:base(u,p[0],np.array(p[1:])); q=[.5]+[2.3]*4\\n with np.errstate(invalid='ignore',divide='ignore'):\\n  try:\\n   opt=least_squares(lambda p:profile(fn(u,*p),v)[0].ravel(),q,max_nfev=400); print(name,np.round(opt.x,7),rms(opt.fun))\\n  except (ValueError,np.linalg.LinAlgError): pass\\nopt=least_squares(lambda p:profile(base(u,*p),v)[0].ravel(),[.5,2.3]); e,m,_=profile(base(u,*opt.x),v); e=e@np.linalg.inv(m); print('unrotated residual against input (each column sorted by u)'); print(np.round(np.column_stack([np.c_[u[:,i],e[:,i]][np.argsort(u[:,i])] for i in range(4)]),5)); print('resid-product correlations',np.round(np.corrcoef(np.c_[e,u,u**2,u[:,[0,0,0,1,1,2]]*u[:,[1,2,3,2,3,3]]].T)[:4,4:],2))\\nA=branch(base,p['v1'],[.5,2.3],([0,.4],[3,5])); B=branch(lambda u,k:np.cos(k*u),p['v2'],[2.4],([1.9],[2.9])); L=aff(np.c_[A,B]); D=aff(np.c_[A,B,np.sum(A*B,1)]); S=aff(np.c_[A,B,A[:,0]*B[:,1]]);\\ndef modes(i,j,fast,slow):\\n q=least_squares(lambda q: proj(q,i,fast,slow)[0].ravel(),[.4,1.8],bounds=([.08,1],[.9,3])).x\\n e,c=proj(q,i,fast,slow); f=-np.expm1(-t[:,None]*q)\\n st=(slow[j]@c[:slow.shape[1]])[:,None]*f[:,0]+(fast[j]@c[slow.shape[1]:])[:,None]*f[:,1]\\n ey=D[j]@ls(D[i],y[i])-y[j]; es=st-Y[j]; return [np.mean(abs(ey)),np.mean(abs(es)),max(np.mean(abs(es),axis=0))],q,c\\n\\ndef proj(q,i,fast,slow):\\n f=-np.expm1(-t[:,None]*q); x=np.c_[(slow[i,None,:]*f[None,:,0,None]).reshape(len(i)*len(t),-1),(fast[i,None,:]*f[None,:,1,None]).reshape(len(i)*len(t),-1)]; c=ls(x,Y[i].ravel()); return x@c-Y[i].ravel(),c\\nfor fast,slow in [(D,S),(D,np.c_[S,D[:,-1]]),(np.c_[D,S[:,-1]],S),(np.c_[D,S[:,-1]],np.c_[S,D[:,-1]])]:\\n out=[]\\n for i,j in [(np.arange(56),np.arange(56,72))]+[(a[:56],a[56:]) for a in [np.random.default_rng(k).permutation(72) for k in range(8)]]:\\n  ee,q,c=modes(i,j,fast,slow); out.append(ee)\\n print('mode widths',fast.shape[1],slow.shape[1],'ordered',out[0],'worst',np.max(out,axis=0),'rate/coefs',q,np.round(c,4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: additive panel-C readouts → H2: dot-product and cross-branch terms drive the endpoint and two trajectory modes; ordered 56/16 MAEs are 0.00767 for y and 0.00836 for state.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The two calibrated branch outputs can be combined additively.\",\n    \"empirical_witness\": \"On the 56/16 split, additive branches give y/state MAEs of 0.27016/0.23069; adding the branch dot product and A0×B1 reduces them to 0.00767/0.00836.\",\n    \"causal_blanket_diagnosis\": \"The additive readout omits interactions between the two branches.\",\n    \"sublated_pivot\": \"Retain panel calibration and fit compact, mode-specific interaction terms.\",\n    \"risk_kind\": \"missing_interaction_basis\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use all 16 cross-branch products\",\n      \"rejected_reason\": \"They improve training fit but worsen both ordered held-out errors compared with the two-term interaction basis.\"\n    }\n  ],\n  \"rationale\": \"The first branch still misses its panel at 0.00483 RMSE, compared with about 0.00010 for the cosine branch. Test compact corrections to locate that mismatch, then compare mode-specific supports on repeated held-out splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d5cd5c3841c48d12e97a569fc1cd52a438842c49ca2605d5d77283202bf54ddd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50505.69,
+      "usage_known": true,
+      "prompt_tokens": 26968,
+      "cached_tokens": 9344,
+      "completion_tokens": 1923
+    }
+  ]
+}

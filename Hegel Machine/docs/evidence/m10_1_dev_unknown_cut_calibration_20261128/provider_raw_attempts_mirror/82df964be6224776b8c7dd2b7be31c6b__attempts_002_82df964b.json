@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "82df964be6224776b8c7dd2b7be31c6b",
+  "call_seq": 2,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Fixed_TwoStage_Modular_Online__dev_m101_c04_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:59:13.030238+00:00",
+  "ended_at_utc": "2026-11-28T07:59:37.797210+00:00",
+  "request_sha256": "8637fffa2e37eab2d33251dafca2b16a314eb76314142dc0f3d6c6fc831947d1",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 12459,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15583,
+    "cached_tokens": 9344,
+    "completion_tokens": 874
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && sed -n '37,105p' test_dag_candidate.py && ls -l _frozen_nodes && cat public_asset_index.json && cat >/tmp/probe_node01.py <<'PY'\\nimport sys,pickle,itertools,numpy as np\\nsys.path.insert(0,'/holdout_task/_frozen_nodes')\\nimport node_00\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nd=node_00.run_node({'__input__':s}); x,y,t=d['z_tr'],d['y'],d['traj']; a,b=node_00._calibration(s)[0:2]; u=(s['train']['x']-a)/b\\nnp.set_printoptions(precision=4,suppress=True)\\nprint('time',d['eval_times'],'z ranges',x.min(0),x.max(0),'trajectory svals',np.linalg.svd(t,compute_uv=False))\\ndef poly(x,k):\\n return np.column_stack([np.prod(x[:,idx],axis=1) for j in range(k+1) for idx in itertools.combinations_with_replacement(range(x.shape[1]),j)])\\ndef score(A,Y):\\n f=np.linalg.lstsq(A[:52],Y[:52],rcond=None)[0]; r=A@f-Y\\n return [round(np.abs(v).mean(),6) for v in (r[:52],r[52:])]\\nfor w in (u,x):\\n for k in (1,2,3):\\n  print('poly',k,score(poly(w,k),y),score(poly(w,k),t))\\n for k in (.5,1.,1.5,2.,3.):\\n  print('trig',k,score(np.column_stack((poly(w,2),np.sin(k*w),np.cos(k*w))),y),score(np.column_stack((poly(w,2),np.sin(k*w),np.cos(k*w))),t))\\nprint('traj rows',t[:7]); print('trajectory endpoint fits by horizon:')\\nfor j in range(t.shape[1]): print(j,score(poly(x,2),t[:,j]),score(poly(x,3),t[:,j]))\\nfor k in (1,2):\\n A=poly(x,k); f=np.linalg.lstsq(A[:52],y[:52],rcond=None)[0]; print('scalar coefficients',k,f)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_node01.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Frozen affine calibration → compact nonlinear scalar basis; the reported scalar holdout MAE is 0.083209.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Immediately fit a full cubic\",\n      \"rejected_reason\": \"With 52 fitting rows and 35 coefficients, a full cubic may have high leverage; compare it against compact bases first.\"\n    }\n  ],\n  \"rationale\": \"Compare calibrated and pre-mixing coordinates on the public split. The scalar residuals will guide basis selection, and per-horizon errors will reveal whether a trajectory fallback is needed if no reusable implementation is present.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "bae0ea67570228660197dbe27bf9f4b41b9e3e8b2ffbd4262cfc5875e7d3343d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27231.4,
+      "usage_known": true,
+      "prompt_tokens": 15583,
+      "cached_tokens": 9344,
+      "completion_tokens": 874
+    }
+  ]
+}

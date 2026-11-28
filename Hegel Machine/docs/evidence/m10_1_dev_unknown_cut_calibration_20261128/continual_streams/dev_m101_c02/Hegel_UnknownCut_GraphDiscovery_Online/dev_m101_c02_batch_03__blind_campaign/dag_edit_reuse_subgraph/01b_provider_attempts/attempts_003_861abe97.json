@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "861abe97865b47aa850bcdf031029bac",
+  "call_seq": 3,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c02_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:11:05.733788+00:00",
+  "ended_at_utc": "2026-11-28T08:11:27.549125+00:00",
+  "request_sha256": "9d16891406c5d2977e3d27f38a68c386573aa9098236cb2bbaef42fbfa234ba3",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 22012,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18886,
+    "cached_tokens": 9344,
+    "completion_tokens": 798
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport contextlib,io,sys,numpy as np\\nsys.path.insert(0,'/tmp')\\nwith contextlib.redirect_stdout(io.StringIO()):\\n    from panel_probe import u,v,features,robust\\nA,names=features(u,3); c,r,g=robust(A,v)\\nfor j in range(v.shape[1]):\\n    print('output',j,'strongest',[(names[i],round(c[i,j],8)) for i in np.argsort(abs(c[:,j]))[-10:][::-1]])\\nfor threshold in (0.001,0.005,0.02,0.04,0.07,0.10):\\n    cv=[]; supports=set()\\n    for h in g:\\n        m=np.arange(len(A))!=h; cc,_,gg=robust(A[m],v[m]); keep=abs(cc)>threshold\\n        supports.add(tuple(tuple(names[i] for i in np.flatnonzero(k)) for k in keep.T))\\n        ag,vg=A[m][gg],v[m][gg]; pred=[]\\n        for j,k in enumerate(keep.T):\\n            pred.append(A[h,k]@np.linalg.lstsq(ag[:,k],vg[:,j],rcond=None)[0])\\n        cv.append(np.linalg.norm(v[h]-pred))\\n    print('threshold',threshold,'distinct supports',len(supports),'example',next(iter(supports)),'LOO median/max',np.median(cv),max(cv))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coupled quadratic -> H2 sparse coupled cubic calibration; the full cubic reduces worst leave-one-anchor-out forward error from 0.225209 to 0.001306.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A coupled quadratic basis suffices to describe Panel A on the inlier calibration domain.\",\n    \"empirical_witness\": \"On the same 45 inliers, worst leave-one-anchor-out forward L2 error was 0.225209 with the coupled quadratic and 0.001306 with the full cubic.\",\n    \"causal_blanket_diagnosis\": \"The quadratic omits nonlinear coordinate interactions; the same three gross residuals are isolated under both fits, so the inlier error is not explained by outlier selection.\",\n    \"sublated_pivot\": \"Keep robust forward fitting, identify stable cubic terms within training folds, then invert the compact map.\",\n    \"risk_kind\": \"basis_incompleteness\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Invert the full 35-term fit\",\n      \"rejected_reason\": \"It interpolates the anchors well, but unnecessary terms can distort inversion beyond their range; check whether sparse support preserves held-out accuracy.\"\n    }\n  ],\n  \"rationale\": \"Fold-specific support selection will detect whether the apparent cubic sparsity depends on individual anchors. Stable support with low held-out error warrants a compact forward map; otherwise retain the richer basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "f3aa2c19c6c5b7ca90dc4957baf92e7bf14a9879f64062361e07b704b0f7519b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24253.57,
+      "usage_known": true,
+      "prompt_tokens": 18886,
+      "cached_tokens": 9344,
+      "completion_tokens": 798
+    }
+  ]
+}

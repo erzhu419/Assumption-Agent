@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "df7c9a0379f74d76b0c720fecc8c7ae9",
+  "call_seq": 6,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:00:47.874885+00:00",
+  "ended_at_utc": "2026-11-28T08:01:26.764878+00:00",
+  "request_sha256": "a26deddda6b8a6e8a9a626e60187e7a9e9fdceb981166fbae4dfd017df07ebe8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43836,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30138,
+    "cached_tokens": 9344,
+    "completion_tokens": 1658
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/refine.py <<'PY'\\nfrom operators import *\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\nfrom scipy.special import erf\\nnp.set_printoptions(precision=5,suppress=True)\\nc=S['panel_c']; u=c['u']; v=c['v1'];\\nfunc={'asinh':np.arcsinh,'atan':np.arctan,'erf':erf,'tanh':np.tanh,'softsign':lambda w:w/(1+abs(w)),'root':lambda w:w/np.sqrt(1+w*w),'bend':lambda w:np.sqrt(1+w*w),'sin':np.sin}\\nres=[]\\nfor name,h in func.items():\\n for shift in (False,True):\\n  def design(w,p):return np.c_[affine(w),h(w*np.exp(p[0])+(p[1] if shift else 0))]\\n  def err(p):\\n   f=design(u,p);return (v-f@ls(f,v)).ravel()\\n  p=least_squares(err,np.array([.5,0.] if shift else [.5]),bounds=(-3.,3.)).x; f=design(u,p); b=ls(f,v); r=v-f@b; lev=(np.linalg.qr(f)[0]**2).sum(1); e=np.sqrt(np.mean((r/(1-lev[:,None]))**2)); print(name,shift,p,e,np.linalg.svd(b[5:],compute_uv=False)); res.append((e,h,p,b,shift))\\ne,h,p,b,shift=min(res,key=lambda q:q[0]); c1=lambda w:np.c_[affine(w),h(w*np.exp(p[0])+(p[1] if shift else 0))]@b\\nf2=lambda w:w+np.logaddexp(1.1*w,-1.1*w)/1.1\\nq=ls(affine(f2(u)),c['v2']); c2=lambda w:affine(f2(w))@q\\nx=S['train']['x']; y=S['train']['y']; z=S['train']['traj']; t=S['eval_times']; rng=np.random.default_rng(451); splits=[(np.arange(56),np.arange(56,72))]+[(p[:56],p[56:]) for p in [rng.permutation(72) for _ in range(8)]]; modes_fold=[modes(t,z[tr]) for tr,te in splits]; Z=[(m@ls(m,z[tr].T)).T for m,(tr,te) in zip(modes_fold,splits)]\\ncs=coords(x,S); kernels={}; base=np.c_[affine(x),powers(x,2)]; P=base@base.T\\nfor name,w in cs.items():\\n if name not in ('raw','A','Ai','BA','BAi','BiA','BiAi','B','Bi'):continue\\n for label,W in [('w',w),('c1',c1(w)),('c2',c2(w)),('c12',np.c_[c1(w),c2(w)]),('wc12',np.c_[w,c1(w),c2(w)])]:\\n  W=W/np.sqrt(W.shape[1]/4); D=cdist(W,W,'sqeuclidean');\\n  for length in (.7,1.1,1.6,2.3,3.4):\\n   R=np.sqrt(5*D)/length\\n   for tag,K in [('rbf',np.exp(-D/(2*length**2))),('m52',(1+R+R*R/3)*np.exp(-R))]:\\n    kernels[name,label,length,tag]=K\\nerrs=[]; E=np.eye(len(x))\\nfor key,K in kernels.items():\\n for w in (.1,1.):\\n  for noise in (1e-5,1e-4,1e-3,1e-2):\\n   G=P+w*K+noise*E; er=[]\\n   for (tr,te),zt in zip(splits,Z):\\n    pred=G[np.ix_(te,tr)]@solve(G[np.ix_(tr,tr)],np.c_[y[tr],zt],assume_a='pos'); a=abs(pred-np.c_[y[te],z[te]]); er.append(np.r_[a[:,0].mean(),a[:,1:].mean(),a[:,-1].mean()]);\\n   errs.append((key+(w,noise),np.array(er)))\\nfor j in range(3):\\n print('target',j)\\n for k,a in sorted(errs,key=lambda p:np.mean(p[1][:,j])+.35*np.max(p[1][:,j]))[:12]: print(k,a[0],a.mean(0),a.max(0))\\n for k,a in sorted((p for p in errs if p[0][:2]==('raw','w')),key=lambda p:np.mean(p[1][:,j])+.35*np.max(p[1][:,j]))[:2]: print('raw',k,a[0],a.mean(0),a.max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: fixed polynomial readout -> H2: test regularized nonlinear readouts in calibrated and panel-derived coordinates; the archive’s reference-split MAE is 0.041965 for y and 0.009713 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the dual panel directly as a linear readout\",\"rejected_reason\":\"Prior held-out tests did not improve on the archive; reproducing a panel does not establish its role in prediction.\"}],\"rationale\":\"Panel C’s second map fits a log-cosh law near the measurement floor. Refine the first map independently, then screen whether either map improves scalar, trajectory, or terminal prediction under regularization before using it in the solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "7bb2d37835a1289a59f9a6e5cafd08e0867bf5c7c38b7fe4325ac8f60317b1d3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43858.44,
+      "usage_known": true,
+      "prompt_tokens": 30138,
+      "cached_tokens": 9344,
+      "completion_tokens": 1658
+    }
+  ]
+}

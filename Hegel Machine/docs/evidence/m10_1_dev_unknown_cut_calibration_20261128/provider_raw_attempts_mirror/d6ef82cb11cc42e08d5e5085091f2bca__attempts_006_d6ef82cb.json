@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d6ef82cb11cc42e08d5e5085091f2bca",
+  "call_seq": 6,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:24:07.046484+00:00",
+  "ended_at_utc": "2026-11-28T08:24:46.005342+00:00",
+  "request_sha256": "92d3d36608615f07bdffc99c41c3ca58da82d3273f59c4b3e7faa12116cc44b7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48696,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30015,
+    "cached_tokens": 9344,
+    "completion_tokens": 1592
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/structured05.py <<'PY'\\nimport numpy as np,pickle,importlib.util,itertools as it\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\np='/tmp/hegel_continual_archive/dev_m101_c04_batch_03_solver.py'; sp=importlib.util.spec_from_file_location('arch',p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; y=t['y']; ls=m._ls; aff=m._affine\\na,g=m._calibrate(s['panel_a']); u=(t['x']-a)/g; z=m._operator(s['panel_b'])(u); rng=np.random.default_rng(912); folds=[np.arange(72)]+[rng.permutation(72) for _ in range(5)]\\nnp.set_printoptions(precision=4,suppress=True)\\nP=PolynomialFeatures(4); F=P.fit_transform(z); d=P.powers_.sum(1); names=P.get_feature_names_out(); B=F[:,d<=1]; Q=F[:,d==2]; print('quartic',[(k,round(v,3)) for k,v in zip(names,ls(F,y))]); print('poly singular tail',np.linalg.svd(F,compute_uv=False)[-8:]);\\ndef test(fun):\\n return np.round([np.mean(abs(fun(ix[:56])[ix[56:]]-y[ix[56:]])) for ix in folds],5)\\nfor deg in [1,2,3]:\\n for dd in [1,2,3]:\\n  N=F[:,d<=deg]; H=F[:,(d>0)&(d<=dd)];\\n  def pred(tr,ret=False):\\n   c=ls(np.c_[N,-y[:,None]*H][tr],y[tr]); den=1+H@c[N.shape[1]:]; return (c,den) if ret else N@c[:N.shape[1]]/den\\n  c,den=pred(np.arange(72),True); print('ratio',deg,dd,test(pred),'fit',np.std(pred(np.arange(72))-y),'den',den.min(),den.max(),'coef',c[N.shape[1]:])\\n# Variable projection: a single nonlinear index plus the archived affine/quadratic terms.\\ncross=np.c_[z[:,0]*z[:,2],z[:,1]*z[:,3]]\\nfor label,h in [('tanh',np.tanh),('sin',np.sin),('rational',lambda w:w/(1+w*w)),('softsign',lambda w:w/np.sqrt(1+w*w)),('cubic',lambda w:w**3),('sigmoid',lambda w:np.tanh(w/2))]:\\n for add in [cross,Q]:\\n  U=np.c_[B,add]; starts=np.r_[np.c_[np.zeros(4),np.eye(4)],np.c_[np.zeros(8),rng.normal(size=(8,4))]]\\n  def pred(tr,ret=False):\\n   def des(p): return np.c_[U,h(B@p)]\\n   def res(p):\\n    X=des(p)[tr]; return X@ls(X,y[tr])-y[tr]\\n   opt=min((least_squares(res,p,max_nfev=90,bounds=(-12,12)) for p in starts),key=lambda o:o.cost); X=des(opt.x); c=ls(X[tr],y[tr]); return (opt.x,c,np.std(X@c-y)) if ret else X@c\\n  print(label,add.shape[1],test(pred),pred(np.arange(72),True))\\n# Fixed ray grammars with a fitted scale, testing both additive and divisive placement.\\nrays=[]\\nfor i in range(4):\\n rays.append(np.eye(4)[i]);\\n for j in range(i+1,4):\\n  for sg in [-1,1]: rays.append(np.eye(4)[i]+sg*np.eye(4)[j])\\nrays.extend([ls(B,y)[1:]/np.linalg.norm(ls(B,y)[1:])]); W=z@np.asarray(rays).T\\nfor deg in [1,2,3]:\\n N=F[:,d<=deg]; out=[]\\n for j,w in enumerate(W.T):\\n  def calc(tr,ret=False):\\n   def des(p): return N/(1+(w*p[0]+p[1])[:,None]**2)\\n   def r(p):\\n    A=des(p)[tr];return A@ls(A,y[tr])-y[tr]\\n   opt=least_squares(r,[.6,0],bounds=([-8,-4],[8,4]),max_nfev=100); A=des(opt.x); return (np.sqrt(2*opt.cost/len(tr)),opt.x) if ret else A@ls(A[tr],y[tr])\\n  out.append((*calc(np.arange(72),True),j))\\n print('ray ratios',deg,sorted(out,key=lambda r:r[0])[:5])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structured05.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (generic cubic readout) -> H2 (compact rational or single-index readout); the cubic has worst-split scalar MAE 0.05701, while direct trajectory regression on calibrated panel B has worst-split MAE 0.004834.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use an unrestricted quartic\",\n      \"rejected_reason\": \"It fits training closely but has worst-split error above 0.4; its coefficients are useful for diagnosis, not prediction.\"\n    },\n    {\n      \"option\": \"Retain the two-exponential trajectory basis\",\n      \"rejected_reason\": \"Direct regression at the observed times wins on all six tested splits.\"\n    }\n  ],\n  \"rationale\": \"The gap between cubic and quartic training residuals suggests a missing structure, but held-out performance rules out the unrestricted quartic. Test low-parameter nonlinear readouts with every fitted parameter estimated inside the training split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "6eb7647e126052585219233aae344306b9a3be8539318c67ef3d5d94850fd761",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41506.61,
+      "usage_known": true,
+      "prompt_tokens": 30015,
+      "cached_tokens": 9344,
+      "completion_tokens": 1592
+    }
+  ]
+}

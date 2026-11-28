@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d068568407124b49a8a2737e0da94c8a",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:01:31.614169+00:00",
+  "ended_at_utc": "2026-11-28T08:02:10.687135+00:00",
+  "request_sha256": "535b10011686d185b18c8ce4deaf2c4822d9cefd422be92f7ae6407a4efce094",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49873,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33035,
+    "cached_tokens": 9344,
+    "completion_tokens": 1537
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/dev_m101_c01_batch_00_solver.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling variable projection' | head -7; cat > /tmp/ridges.py <<'PY'\\nfrom operators import *\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\nD=S['train']; x=D['x']; y=D['y']; z=D['traj']; t=S['eval_times']; n=len(x)\\nF=np.c_[affine(x),powers(x,2)]; G=powers(x,3)\\nrng=np.random.default_rng(451); splits=[(np.arange(56),np.arange(56,72))]+[(p[:56],p[56:]) for p in [rng.permutation(72) for _ in range(8)]]\\ndef ridge(x, v, kind):\\n w=x@v[:4]; a=np.exp(v[4])\\n if kind=='p':return np.c_[w**3,w**4,w**5]\\n if kind=='sin':return np.sin(a*w+v[5])[:,None]\\n if kind=='tanh':return np.tanh(a*w+v[5])[:,None]\\n if kind=='rat':return (1/(1+(a*w+v[5])**2))[:,None]\\n if kind=='quot':return np.c_[np.ones(len(x)),x]/(1+(a*w[:,None]+v[5])**2)\\n if kind=='norm':return (1/(1+a*np.sum((x-v[:4])**2,axis=1)))[:,None]\\n if kind=='soft':return ((a*w+v[5])/(1+abs(a*w+v[5])))[:,None]\\ndef fit(x,F,Y,kind,seeds):\\n Q=np.linalg.qr(F)[0]; r0=Y-Q@(Q.T@Y)\\n def fun(v):\\n  H=ridge(x,v,kind); H=H-Q@(Q.T@H)\\n  return (r0-H@ls(H,r0)).ravel()\\n lo=np.array([-2.]*4+[-2.,-3.]); hi=-lo\\n fs=[least_squares(fun,p,bounds=(lo,hi),max_nfev=140,ftol=1e-7) for p in seeds]\\n f=min(fs,key=lambda p:p.cost); H=np.c_[F,ridge(x,f.x,kind)]; return f.x,ls(H,Y),np.sqrt(np.mean(fun(f.x)**2))\\nresults={}; params={}\\nfor tr,te in splits:\\n m=modes(t,z[tr]); A=ls(m,z[tr].T).T\\n Q=np.linalg.qr(F[tr])[0]; RR=y[tr]-Q@(Q.T@y[tr]); C=G[tr]-Q@(Q.T@G[tr]); cb=ls(C,RR)\\n ten=np.zeros((4,4,4)); from itertools import permutations\\n for idx,val in zip(combinations_with_replacement(range(4),3),cb):\\n  perms=set(permutations(idx));\\n  for j in perms:ten[j]=val/len(perms)\\n u=np.linalg.svd(ten.reshape(4,-1))[0].T\\n for j,Y in enumerate((y[tr,None],A)):\\n  for kind in ('p','sin','tanh','rat','quot','norm','soft'):\\n   seeds=[np.r_[v,l,h] for v in u[:3] for l,h in ((0.,0.),(.25,.6),(-.4,-.6))]\\n   p,b,e=fit(x[tr],F[tr],Y,kind,seeds); pr=np.c_[F[te],ridge(x[te],p,kind)]@b\\n   target=y[te,None] if j==0 else z[te]; pr=pr if j==0 else pr@m.T\\n   results.setdefault((j,kind),[]).append(np.mean(abs(pr-target))); params.setdefault((j,kind),(p,e))\\n for label,l,w,no in [('short',1.1,.1,.001),('long',1.6,1,.001),('verylong',2.3,1,.0001)]:\\n  K=F@F.T+w*np.exp(-cdist(x,x,'sqeuclidean')/(2*l*l)); P=K[np.ix_(te,tr)]@solve(K[np.ix_(tr,tr)]+no*np.eye(len(tr)),np.c_[y[tr],A],assume_a='pos');\\n  results.setdefault((0,label),[]).append(np.mean(abs(P[:,0]-y[te]))); results.setdefault((1,label),[]).append(np.mean(abs(P[:,1:]@m.T-z[te])))\\nfor k,v in results.items():print(k,'gate mean worst',np.round([v[0],np.mean(v),max(v)],6),'first fit',params.get(k))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ridges.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: smooth residual after quadratic readout -> H2: test explicit single-index nonlinear terms; the current kernel gives worst-split MAEs of 0.06292 for scalar and 0.00817 for trajectory in their respective configurations.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a kernel for both outputs\",\n      \"rejected_reason\": \"It is a strong fallback for trajectory, but the scalar error is still large enough to justify testing a compact nonlinear readout.\"\n    }\n  ],\n  \"rationale\": \"The scalar quadratic has one positive and three negative eigenvalues, suggesting a directional term over broad curvature. Fit candidate terms entirely within each training split and retain them only if they beat the kernel on held-out rows.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "377dddef0b54ca70a6ffef05636db6fd84f54387e5366726f0cb22798da5e39d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41591.39,
+      "usage_known": true,
+      "prompt_tokens": 33035,
+      "cached_tokens": 9344,
+      "completion_tokens": 1537
+    }
+  ]
+}

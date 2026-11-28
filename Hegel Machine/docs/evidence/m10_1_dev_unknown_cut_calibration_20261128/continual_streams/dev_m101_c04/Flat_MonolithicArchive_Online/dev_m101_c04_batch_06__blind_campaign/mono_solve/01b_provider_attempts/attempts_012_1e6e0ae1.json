@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1e6e0ae176f4477b95c144729f9a1c8d",
+  "call_seq": 12,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:33:18.796545+00:00",
+  "ended_at_utc": "2026-11-28T08:33:47.963231+00:00",
+  "request_sha256": "1df11f1c3b30972f3c8a8eba05b5117c2a3c1dc0fc348ea12ebbe4d31812802f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 77456,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40018,
+    "cached_tokens": 9344,
+    "completion_tokens": 1078
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = s.index('def _scalar_readout(')\\nb = s.index('    def residual(p):', a)\\ns = s[:a] + '''def _scalar_readout(train, test, y):\\n    u, q, _, _ = train\\n    p0 = _ls(np.column_stack((u, q)), y)[1:5]\\n    p0 /= np.linalg.norm(p0)\\n\\n    def basis(data, p):\\n        u, _, pairs, shared = data\\n        cross = pairs.sum(axis=1)\\n        score = u @ p\\n        gate = 1 / (1 + score**2)\\n        return np.column_stack((u, shared, cross, score * gate, cross * gate))\\n\\n'''+s[b:]\\ns = s.replace(\\\"def _predict(train, test, y, traj, mode='contrast'):\\\", 'def _predict(train, test, y, traj):').replace('test_shared), y, mode)', 'test_shared), y)')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\ntr = s['train']; rows = np.arange(len(tr['y'])); z, _ = m._coordinates(s)\\nfolds = [rows[56:], *np.array_split(np.random.default_rng(9).permutation(rows), 5), np.argsort(np.linalg.norm(z, axis=1))[-12:]]\\nerrors = []\\nfor j in folds:\\n    i = np.setdiff1d(rows, j)\\n    train = {k: tr[k][i] for k in ('x', 'y', 'traj')}\\n    train['summary'] = np.array([train['y'].mean(), train['y'].std(), train['traj'][:, -1].mean(), train['traj'][:, -1].std()])\\n    pred = m.solve_batch(dict(s, train=train, test={'x': tr['x'][j]}))\\n    ey = np.abs(pred['y_hat'] - tr['y'][j]).mean()\\n    et = np.abs(pred['state_pred'] - tr['traj'][j]).mean(axis=0)\\n    errors.append(np.r_[ey, et.mean(), et])\\ne = np.vstack(errors)\\nprint('56/16 scalar and trajectory MAE:', e[0, :2])\\nprint('Six ordinary splits mean/worst scalar MAE:', e[:6, 0].mean(), e[:6, 0].max())\\nprint('Outer-input scalar MAE:', e[-1, 0])\\nprint('Worst trajectory MAE by timestamp:', e[:, 2:].max(axis=0))\\nassert e[:6, 0].max() < 0.0102 and e[-1, 0] < 0.0133 and e[:, 2:].max() < 0.0067, e\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (free rational numerator coefficients) -> H2 (a shared affine score and symmetric cross-pair gating); the challenger’s worst scalar MAE is 0.01319 across seven slices, and worst trajectory MAE by timestamp is 0.00665.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\",\"ng_t09\"]},\"considered_alternatives\":[{\"option\":\"Keep the free rational numerator\",\"rejected_reason\":\"The aligned model improves both worst ordinary-split MAE (0.01241 to 0.01010) and outer-input MAE (0.01451 to 0.01319), without changing trajectories.\"}],\"rationale\":\"Promote the aligned readout and remove unused trial modes. Verify through the public entry point in an isolated process so a wiring or simplification regression is caught before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "9fd3e658d55994ffc9257756e248f0bfe88ba8fe413553a26d08b3047f48c655",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31724.58,
+      "usage_known": true,
+      "prompt_tokens": 40018,
+      "cached_tokens": 9344,
+      "completion_tokens": 1078
+    }
+  ]
+}

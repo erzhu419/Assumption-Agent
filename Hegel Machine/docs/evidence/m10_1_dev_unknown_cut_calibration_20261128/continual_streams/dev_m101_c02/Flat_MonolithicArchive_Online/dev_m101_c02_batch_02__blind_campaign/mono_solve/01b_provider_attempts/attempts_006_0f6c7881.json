@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0f6c7881ee564cedaffcb6959550402b",
+  "call_seq": 6,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Flat_MonolithicArchive_Online__dev_m101_c02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:07:44.304384+00:00",
+  "ended_at_utc": "2026-11-28T08:08:18.420939+00:00",
+  "request_sha256": "25bdeb5c1b64594d883a09c4ceda3a22a9f42e59949ca9b675e98ee3ae168954",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42050,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28109,
+    "cached_tokens": 9344,
+    "completion_tokens": 1374
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/refine02.py <<'PY'\\nexec(open('/tmp/explore02.py').read().split('p=least_squares')[0])\\nrng=np.random.default_rng(224); D=np.c_[A(z),z[:,0]*z[:,2]+z[:,1]*z[:,3]]; h0=D@np.linalg.lstsq(D,y,rcond=None)[0]; splits=[va]+[rng.permutation(len(y))[:16] for _ in range(6)]+[np.argsort(h0)[np.r_[0:8,-8:0]]]; print('times',t); print('panel A flagged',np.flatnonzero(~keep));\\nfor name,fn in [('atan',np.arctan),('tanh',np.tanh),('rational',lambda h:h/(1+h*h)),('gaussian',lambda h:h*np.exp(-h*h)),('sin',np.sin),('erf',__import__('scipy.special',fromlist=['erf']).erf),('asinh',np.arcsinh),('softsign',lambda h:h/np.sqrt(1+h*h))]:\\n es=[]; tails=[]; fitted=None\\n for vi in splits+[np.arange(len(y))]:\\n  ti=np.setdiff1d(np.arange(len(y)),vi) if len(vi)<len(y) else vi; init=np.linalg.lstsq(D[ti],y[ti],rcond=None)[0];\\n  def model(p,idx):\\n   h=D[idx]@p; return np.c_[np.ones(len(h)),h,fn(h)]\\n  def cf(p):return np.linalg.lstsq(model(p,ti),y[ti],rcond=None)[0]\\n  fits=[least_squares(lambda p:model(p,ti)@cf(p)-y[ti],init*v,max_nfev=150) for v in (.35,.7,1.15,1.6)]; fit=min(fits,key=lambda o:o.cost).x; e=np.abs(model(fit,vi)@cf(fit)-y[vi]); es.append(e.mean()); tails.append(e.max()); fitted=(fit,cf(fit))\\n print('scalar',name,np.round(es,5), 'tail max',round(tails[-2],5),'params',*[p.round(4) for p in fitted]);\\nprint('trajectory normalized shapes', (np.linalg.lstsq(z,T,rcond=None)[0]/np.linalg.lstsq(z,T,rcond=None)[0][:,-1:]).round(6));\\nfns={'exp':lambda r:-np.expm1(-r*t),'log':lambda r:np.log1p(r*t),'rat':lambda r:t/(1+r*t),'sqrt':lambda r:np.sqrt(1+r*t)-1,'tanh':lambda r:np.tanh(r*t),'linear':lambda r:t};\\nfor n,m in itertools.combinations_with_replacement(fns,2):\\n if n==m=='linear':continue\\n es=[]\\n for vi in splits:\\n  ti=np.setdiff1d(np.arange(len(y)),vi); co=np.linalg.lstsq(z[ti],T[ti],rcond=None)[0]\\n  def predict(p):\\n   B=np.array([fns[n](p[0]),fns[m](p[1])]); return co@np.linalg.pinv(B)@B\\n  fit=min([least_squares(lambda p:(z[ti]@(predict(p)-co)).ravel(),v,bounds=(.0002,20),max_nfev=85) for v in ([.5,1.5],[1.5,.5])],key=lambda o:o.cost);\\n  es.append(np.abs(z[vi]@predict(fit.x)-T[vi]).mean())\\n print('traj',n,m,np.round(es,5),'rates',fit.x.round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine02.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (pure saturation) -> H2 (linear plus saturating readout of one paired index); worst scalar MAE across three held-out splits improved from 0.01538 to 0.00503, and the log-plus-exponential trajectory MAE was 0.00430 on the public split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A bare arctangent adequately describes the scalar readout of the paired panel-B index.\",\n    \"empirical_witness\": \"Adding a linear term in the same index reduces MAE on all three splits: 0.01378 to 0.00433, 0.00823 to 0.00503, and 0.01538 to 0.00436.\",\n    \"causal_blanket_diagnosis\": \"The dominant residual is in the readout shape, not in a missing independent quadratic interaction.\",\n    \"sublated_pivot\": \"Keep the calibrated paired index and profile a linear channel alongside the nonlinear channel.\",\n    \"risk_kind\": \"scalar extrapolation\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Freeze the first noise-scale candidate\",\n      \"rejected_reason\": \"Comparable interpolation errors can conceal different tail behavior; the blocked tail split can distinguish those readouts.\"\n    }\n  ],\n  \"rationale\": \"Compare compact readouts and temporal bases on the same fixed splits, including an input-index tail holdout. Use tail error and stability to choose between candidates that already fit ordinary holdouts near the observed noise scale.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "27e6a13a7c60c6d26855cdf34e32ad1e425cb89a48ac8ed88b809e94761d101d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36503.96,
+      "usage_known": true,
+      "prompt_tokens": 28109,
+      "cached_tokens": 9344,
+      "completion_tokens": 1374
+    }
+  ]
+}

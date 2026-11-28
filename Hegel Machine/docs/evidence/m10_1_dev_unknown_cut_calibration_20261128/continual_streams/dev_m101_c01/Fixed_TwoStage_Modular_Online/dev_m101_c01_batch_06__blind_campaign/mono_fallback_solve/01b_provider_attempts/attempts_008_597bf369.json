@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "597bf3698fd546b3818baf5c29362c5d",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Fixed_TwoStage_Modular_Online__dev_m101_c01_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:28:27.683738+00:00",
+  "ended_at_utc": "2026-11-28T08:29:03.232047+00:00",
+  "request_sha256": "610993004dc3b856f6bad6ad764f27b2fbfdc094d04f78cf56fb8615092bb720",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55677,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34904,
+    "cached_tokens": 9344,
+    "completion_tokens": 1436
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/challenge.py <<'PY'\\nfrom probe import *\\nfrom composed import spaces,folds\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nfrom scipy.spatial.distance import cdist\\nimport importlib.util\\nspec=importlib.util.spec_from_file_location('old','/tmp/hegel_continual_archive/dev_m101_c01_batch_02_solver.py');old=importlib.util.module_from_spec(spec);spec.loader.exec_module(old)\\ndef predict(x,q,y,groups):\\n n=len(x); xs=np.r_[x,q]; D=design(xs,2); D[:,5:]*=.5\\n K=[D[:,:1]@D[:,:1].T,D[:,1:5]@D[:,1:5].T,D[:,5:]@D[:,5:].T]\\n for a in groups:\\n  a=np.asarray(a); a=(a-a[:n].mean(0))/np.maximum(.02,a[:n].std(0)); K.append(a@a.T/a.shape[1]);\\n K=np.asarray(K); train=K[:,:n,:n]; cross=K[:,n:,:n]; eye=np.eye(n); Y=np.asarray(y); center=Y.mean(0); scale=np.maximum(1e-8,Y.std(0)); Y=(Y-center)/scale\\n if Y.ndim==1:Y=Y[:,None]\\n def obj(p,ret=False):\\n  w=np.exp(p); M=np.einsum('i,ijk->jk',w[:-1],train)+w[-1]*eye; fac=cho_factor(M,check_finite=False); c=cho_solve(fac,Y,check_finite=False)\\n  if ret:return (np.einsum('i,ijk->jk',w[:-1],cross)@c).squeeze()*scale+center\\n  G=Y.shape[1]*cho_solve(fac,eye,check_finite=False)-c@c.T\\n  v=.5*np.sum(Y*c)+Y.shape[1]*np.log(fac[0].diagonal()).sum(); g=np.r_[np.einsum('ijk,jk->i',train,G),np.trace(G)]*w*.5\\n  return v,g\\n p=minimize(obj,np.r_[np.full(3,-1.),np.full(len(K)-3,-5.),-8.],jac=True,method='L-BFGS-B',bounds=[(-13,2)]*len(K)+[(-12,-2)],options={'maxiter':100}).x\\n return obj(p,True)\\ndef group(q,kind):\\n out=[]\\n for u in q:\\n  if kind=='smooth':\\n   out += [np.c_[np.sin(1.6*u),np.cos(1.6*u)],np.c_[np.sin(2.8*u),np.cos(2.8*u)],poly(u,3),poly(u,4)]\\n  if kind=='soft':\\n   out += [u/(1+.83*abs(u)),(u[:,:,None]*(u/(1+.83*abs(u)))[:,None,:]).reshape(len(u),-1),poly(u/(1+.83*abs(u)),2)]\\n  if kind=='mixed':\\n   v=np.c_[u/(1+.83*abs(u)),np.cos(1.29*u),np.sin(1.6*u)];out += [v,(u[:,:,None]*v[:,None,:]).reshape(len(u),-1),poly(u,3),poly(u,4)]\\n return out\\nif __name__=='__main__':\\n x,y,z=[S['train'][k] for k in ('x','y','traj')];t=S['eval_times']; sp=spaces(S,x); ss=list(folds(x)); print('telemetry',S['telemetry_vec'],'summary',S['train']['summary'])\\n for k in ['old','raw','a','ai','b','ba','bai','ab','all']:\\n  for kind in (['archive'] if k=='old' else ['smooth','soft','mixed']):\\n   all=[]\\n   for i,j in ss:\\n    if k=='old':\\n     yp,zz=old._components(x[i],y[i],z[i],x[j]); yh=yp@np.array([.25,.30,.30,.15]);zh=np.average(zz,axis=0,weights=[.4,.2,.4])\\n    else:\\n     idx=np.r_[i,j]; groups=group([sp[s][idx] for s in ({'raw':['x'],'all':['ai','ba','ab']}.get(k,[k]))],kind); yh=predict(x[i],x[j],y[i],groups); _,_,basis=np.linalg.svd(z[i],full_matrices=False); basis=basis[:2]; zh=np.column_stack([predict(x[i],x[j],amp,groups) for amp in (z[i]@basis.T).T])@basis\\n    all.append([np.mean(abs(yh-y[j])),np.mean(abs(zh-z[j]))]);\\n   print(k,kind,np.round(np.array(all).T,5),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/challenge.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 direct polynomial panel readouts → H2 regularized nonlinear interactions; the best tested direct panel readout reached only 0.04217 fixed-split scalar MAE versus 0.038276 for the prior gate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select the panel composition with the lowest calibration error\",\"rejected_reason\":\"Calibration fit has not predicted held-out usefulness; direct readouts worsen the fixed-split scalar error.\"}],\"rationale\":\"Compare regularized interactions with the archived solver on the same fixed, randomized, and high-radius splits. Drop panel coordinates unless they improve downstream predictions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "1e9e1a91e3572e1951f9a203d4aa12cdd3a4cea46bd069533891e06c05e314e9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38078.12,
+      "usage_known": true,
+      "prompt_tokens": 34904,
+      "cached_tokens": 9344,
+      "completion_tokens": 1436
+    }
+  ]
+}

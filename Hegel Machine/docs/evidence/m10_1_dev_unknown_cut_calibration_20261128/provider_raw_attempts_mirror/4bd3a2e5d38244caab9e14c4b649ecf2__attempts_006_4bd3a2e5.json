@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4bd3a2e5d38244caab9e14c4b649ecf2",
+  "call_seq": 6,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Flat_MonolithicArchive_Online__dev_m101_c02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:25:30.232676+00:00",
+  "ended_at_utc": "2026-11-28T08:26:05.218043+00:00",
+  "request_sha256": "7561f4b26a2eb166f197bcc8f717f382c6b9c2016ac16c2c02a3bfc34eb00992",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44080,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26698,
+    "cached_tokens": 9344,
+    "completion_tokens": 1382
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/readouts05.py <<'PY'\\nexec(open('/tmp/discover05.py').read().split('for mode in')[0])\\nfrom itertools import combinations_with_replacement\\nnp.set_printoptions(precision=6,suppress=True)\\ni=slice(0,56); j=slice(56,None)\\n\\ndef feat(x,p):\\n d,powr,l,a,f,c,h=p\\n return aff(x**3/(1+d*np.abs(x)**powr)+l*x+a*np.sin(f*x)+c*np.sin(h*x))\\n\\ndef panel(p):\\n a=feat(U,p); op=ls(a,V); return (a@op-V).ravel(),op\\n\\ndef scalar(z,kind):\\n l=aff(z)\\n a,b,c,d=z.T\\n lookup={'linear':l,'paired':np.c_[l,a*c+b*d],'separate':np.c_[l,a*c,b*d],'quadratic':np.c_[l,*[z[:,k]*z[:,l] for k,l in combinations_with_replacement(range(4),2)]]}\\n return lookup[kind]\\n\\ndef fit_y(d,y,mode):\\n ini=ls(d,y)\\n if mode=='plain':return lambda q:q@ini\\n def basis(h):\\n  if mode=='atan':return np.c_[np.ones(len(h)),h,np.arctan(h)]\\n  if mode=='tanh':return np.c_[np.ones(len(h)),h,np.tanh(h)]\\n  if mode=='sine':return np.c_[np.ones(len(h)),h,np.sin(h)]\\n  return np.c_[np.ones(len(h)),h,h**3]\\n def res(p):\\n  a=basis(d@p);return a@ls(a,y)-y\\n opt=min([least_squares(res,c*ini,max_nfev=180) for c in (.5,1,2)],key=lambda o:o.cost)\\n p=opt.x; coef=ls(basis(d@p),y)\\n return lambda q:basis(q@p)@coef\\n\\nsol=[]\\nfor f,h in [(4,9),(7,12),(9,14),(11,16),(14,20),(18,24),(9,23),(12,26)]:\\n o=least_squares(lambda p:panel(p)[0],[.8,2,-.09,.009,f,.005,h],bounds=([.001,.5,-2,-1,1,-1,1],[8,5,2,1,34,1,34]),max_nfev=220)\\n sol.append(o)\\no=min(sol,key=lambda o:o.cost); p=o.x; r,op=panel(p); z=feat(X,p)@op\\nprint('B',np.std(r),p,'time',times)\\nfor k in ('linear','paired','separate','quadratic'):\\n for mode in ('plain','atan','tanh','sine','cube'):\\n  d=scalar(z,k); f=fit_y(d[i],y[i],mode); print(k,mode,np.mean(abs(f(d[i])-y[i])),np.mean(abs(f(d[j])-y[j])))\\nA=aff(z); cf=ls(A[i],T[i]); sv=np.linalg.svd(A[i]@cf,full_matrices=False); print('fitted singulars',sv[1]); print('top temporal ratio',sv[2][0]/sv[2][0,-1]); print('second temporal vector',sv[2][1]); print('raw traj',np.mean(abs(A[j]@cf-T[j])), 'per timestamp',np.mean(abs(A[j]@cf-T[j]),axis=0))\\nfor mode in ('exp-exp','log-exp','t-exp','t-log'):\\n def timebasis(p):\\n  def term(k,r):return {'exp':lambda:-np.expm1(-r*times),'log':lambda:np.log1p(r*times),'t':lambda:times}[k]()\\n  return np.array([term(k,r) for k,r in zip(mode.split('-'),p)]).T\\n def err(p):\\n  b=timebasis(p); fitted=A[i]@cf; return (fitted@b@np.linalg.pinv(b)-fitted).ravel()\\n o=least_squares(err,[.5,1.5],bounds=(.001,30)); b=timebasis(o.x); pred=A[j]@cf@b@np.linalg.pinv(b); print(mode,o.x,np.mean(abs(pred-T[j])),np.linalg.norm(o.fun))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readouts05.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: shared rational-harmonic panel-B operator -> H2: nonlinear scalar link and separate two-mode dynamics; current 56/16 MAEs are 0.05764 scalar and 0.00724 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add more operator harmonics immediately\",\n      \"rejected_reason\": \"Different operator families give nearly identical scalar error; testing the scalar link independently can show whether the error belongs to the operator at all.\"\n    }\n  ],\n  \"rationale\": \"Fit panel B independently and compare readouts on the same held-out rows. If a low-parameter nonlinear link improves the scalar without changing the trajectory, keep the two readouts separate; if temporal constraints do not improve held-out prediction, avoid imposing them.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "14c0eb63a2b730c30cabe28e93e04a72eaf930639d8d38ccb86ceba3c11e2975",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37523.92,
+      "usage_known": true,
+      "prompt_tokens": 26698,
+      "cached_tokens": 9344,
+      "completion_tokens": 1382
+    }
+  ]
+}

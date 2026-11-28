@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e3d4b2752812480caca6f6304e39691a",
+  "call_seq": 3,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Flat_MonolithicArchive_Online__dev_m101_c03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:03:44.277005+00:00",
+  "ended_at_utc": "2026-11-28T08:04:18.111870+00:00",
+  "request_sha256": "dbb8248af9b355c701337870a385ff51d90cc685565b8b1ed8b8a8e02b832b30",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 22122,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19057,
+    "cached_tokens": 9344,
+    "completion_tokens": 1316
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust affine reference-panel alignment' 2>/dev/null | head -c 2600; cat /tmp/hegel_continual_archive/dev_m101_c03_batch_01_solver.py; cat > /tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar,least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=150)\\ndef ls(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef ones(a): return np.c_[np.ones(len(a)),a]\\ndef poly(u,d):\\n from itertools import combinations_with_replacement as cr\\n return np.array([np.prod(u[:,j],axis=1) for k in range(1,d+1) for j in cr(range(4),k)]).T\\np=s['panel_a']; u,v=p['u'],p['v']; X=ones(u); keep=np.ones(len(u),bool)\\nfor i in range(5):\\n c=ls(X[keep],v[keep]); err=np.linalg.norm(X@c-v,axis=1); keep=err<3*np.median(err)\\nprint('A',c,'sing vals',np.linalg.svd(c[1:],compute_uv=False),'resid',np.sort(err));\\np=s['panel_c']; u=p['u']; t=s['eval_times']; Y=s['train']['traj'];\\nfor key in ['v1','v2']:\\n v=p[key]; print(key)\\n for k in [1,2,3]:\\n  ff=ones(poly(u,k)); pred=ff@ls(ff,v); print('poly',k,'rmse',np.mean((pred-v)**2)**.5)\\n for name,fn in [('tanh',lambda u,k:np.tanh(k*u)),('aff+tanh',lambda u,k:.45*u+np.tanh(k*u)),('sin',lambda u,k:np.sin(k*u)),('sin+aff',lambda u,k:np.c_[u,np.sin(k*u)]),('cos',lambda u,k:np.cos(k*u)),('cos+aff',lambda u,k:np.c_[u,np.cos(k*u)]),('tanh+aff',lambda u,k:np.c_[u,np.tanh(k*u)]),('quad diag',lambda u,k:np.c_[u,u*u]),('sin+cos',lambda u,k:np.c_[np.sin(k*u),np.cos(k*u)]),('sin+cos+aff',lambda u,k:np.c_[u,np.sin(k*u),np.cos(k*u)])]:\\n  def loss(k):\\n   f=ones(fn(u,k)); return np.mean((f@ls(f,v)-v)**2)**.5\\n  grid=np.linspace(.2,12,121); ii=np.argmin([loss(k) for k in grid]); k=minimize_scalar(loss,bounds=(grid[max(ii-1,0)],grid[min(ii+1,len(grid)-1)]),method='bounded').x; print(name,round(k,5),round(loss(k),6))\\nfor name,f in [('2 rise',lambda a,b:np.c_[-np.expm1(-a*t),-np.expm1(-b*t)]),('rise+pulse',lambda a,b:np.c_[-np.expm1(-a*t),t*np.exp(-b*t)]),('2 pulse',lambda a,b:np.c_[t*np.exp(-a*t),t*np.exp(-b*t)]),('rise+decay-rise',lambda a,b:np.c_[-np.expm1(-a*t),np.exp(-b*t)*(-np.expm1(-a*t))]),('linear+pulse',lambda a,b:np.c_[t,t*np.exp(-b*t)]),('sin+rise',lambda a,b:np.c_[np.sin(a*t),-np.expm1(-b*t)])]:\\n def err(p):\\n  x=f(*p); return (x@ls(x,Y.T)-Y.T).ravel()\\n z=min([least_squares(err,q,bounds=([.0001]*2,[12]*2)) for q in [[.3,1],[1,.3],[1,2],[2,1]]],key=lambda o:o.cost); print(name,z.x,np.mean(abs(z.fun)),np.max(abs(z.fun)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: diagonal calibration and archived branches -> H2: robust full calibration, rediscovered branches, and two temporal modes; 56/16 baseline y/state MAE is 0.374696/0.358472.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit eight independent time regressions\",\n      \"rejected_reason\": \"The third trajectory singular value is 0.051 versus 2.729 for the second; two shared modes should preserve the signal with fewer parameters.\"\n    }\n  ],\n  \"rationale\": \"Separate gross calibration residuals from real off-diagonal mixing, test compact nonlinear panel bases, and identify a temporal basis before fitting input-to-output laws.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "580e79fba893d73473174712c164093e95df04d8eb73dd9f691f4b7eced53f51",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36290.1,
+      "usage_known": true,
+      "prompt_tokens": 19057,
+      "cached_tokens": 9344,
+      "completion_tokens": 1316
+    }
+  ]
+}

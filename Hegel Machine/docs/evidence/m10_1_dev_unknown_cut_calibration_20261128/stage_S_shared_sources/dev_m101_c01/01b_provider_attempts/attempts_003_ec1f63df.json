@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ec1f63dff7014dafa5294b4c5b8ad27f",
+  "call_seq": 3,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__stageS__dev_m101_c01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:50:21.159145+00:00",
+  "ended_at_utc": "2026-11-28T07:50:58.547243+00:00",
+  "request_sha256": "8a85cc2585ec873e8b536a15f7fb3304f4a6dbfd1672997d7afea899b3f8d066",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 22611,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21635,
+    "cached_tokens": 5504,
+    "completion_tokens": 1620
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust affine reference panel alignment sparse outliers' ; cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement as cr\\nfrom scipy.optimize import minimize, minimize_scalar\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study'];np.set_printoptions(precision=5,suppress=True,linewidth=120)\\ndef a(x):return np.c_[np.ones(len(x)),x]\\ndef poly(x,d):return np.column_stack([np.ones(len(x))]+[np.prod(x[:,i],axis=1) for k in range(1,d+1) for i in cr(range(x.shape[1]),k)])\\ndef score(x,y):\\n p=np.linalg.pinv(x); r=y-x@(p@y);lev=np.einsum('ij,ji->i',x,p);return np.sqrt(np.mean((r/np.maximum(1-lev[:,None],1e-8))**2))\\np=s['panel_a'];u=p['u'];v=p['v'];ix=np.arange(len(u));\\nfor _ in range(5):\\n w=np.linalg.lstsq(a(u)[ix],v[ix],rcond=None)[0];r=np.linalg.norm(v-a(u)@w,axis=1);ix=np.argsort(r)[:45]\\nprint('A map',w,'inlier max',r[ix].max(),'outlier min',np.sort(r)[-3]);print('summary diff',s['train']['summary']-np.array([s['train']['y'].mean(),s['train']['y'].std(),s['train']['traj'][:,-1].mean(),s['train']['traj'][:,-1].std()]))\\np=s['panel_b'];print('B map',np.linalg.lstsq(a(p['u']),p['v'],rcond=None)[0]);print('B LOO affine, quadratic',*[score(poly(p['u'],i),p['v']) for i in (1,2)])\\np=s['panel_c'];u,v1,v2=[p[k] for k in ('u','v1','v2')];print('C v1 range',v1.min(0),v1.max(0));\\nfor k,f,finv in [('identity',lambda x:x,lambda x:x),('asinh',np.arcsinh,np.sinh),('sinh',np.sinh,np.arcsinh),('tanh',np.tanh,np.arctanh),('atan',np.arctan,np.tan)]:\\n for side in ['input','output']:\\n  if side=='output' and k=='tanh':continue\\n  if side=='input': z=minimize_scalar(lambda q:score(a(f(q*u)/q),v1),bounds=(.02,2),method='bounded');print('C1',side,k,round(z.x,4),z.fun)\\n  else:\\n   def fun(q):\\n    b=a(u);pin=np.linalg.pinv(b);h=np.einsum('ij,ji->i',b,pin);g=f(q*v1)/q; z=b@(pin@g);z=g+(z-g)/(1-h[:,None]);return np.sqrt(np.mean((finv(q*z)/q-v1)**2))\\n   z=minimize_scalar(fun,bounds=(.02,1.1),method='bounded');print('C1',side,k,round(z.x,4),z.fun)\\nfor k,z in [('u',u),('v1',v1),('tanh(v1)',np.tanh(v1)),('asinh(v1)',np.arcsinh(v1))]:\\n print('C2',k,'quad',score(poly(z,2),v2),'additive squares',score(np.c_[a(z),z*z],v2)); print(' C2 lin+u2',score(np.c_[a(z),poly(u,2)[:,5:]],v2))\\nt=s['eval_times'];Y=s['train']['traj'];print('time hull',t,'noise',np.linalg.svd(Y,compute_uv=False));\\nfor k in ['exp+time','exp+exp','exp+time*exp','exp+exp^2','rational+time','exp+log']:\\n def fun(q,out=False):\\n  m,n=np.exp(q); e=-np.expm1(-m*t);f={'exp+time':t,'exp+exp':-np.expm1(-n*t),'exp+time*exp':t*np.exp(-n*t),'exp+exp^2':(-np.expm1(-n*t))**2,'rational+time':t,'exp+log':np.log1p(n*t)}[k];e=t/(1+m*t) if k=='rational+time' else e;A=np.c_[e,f];c=Y@np.linalg.pinv(A).T;return (A,c) if out else np.mean((Y-c@A.T)**2)\\n r=minimize(fun,[0,-1],method='Nelder-Mead',options={'maxiter':250}); print('time',k,np.round(np.exp(r.x),4),np.sqrt(r.fun));\\n if k=='exp+exp':print('time coefficients covariance',np.cov(fun(r.x,True)[1].T))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 raw-input polynomial → H2 calibrated compact operators and shared temporal kernels; the cubic tail MAEs are 0.0139 for y and 0.0321/0.0132 for the two temporal scores.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat all panels as affine\",\n      \"rejected_reason\": \"Panel B is nearly affine, but panel C has systematic residuals; test compact nonlinear maps before using its outputs as features.\"\n    }\n  ],\n  \"rationale\": \"Panel leave-one-out errors will show which operator maps are reliable enough to use in the response model. Fitting candidate time bases will determine whether physical kernels offer a better noise floor than unconstrained temporal modes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "a6956e45148685b06e270b8a85dd1732442150e27b295635d95bf621ae43aa49",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42210.95,
+      "usage_known": true,
+      "prompt_tokens": 21635,
+      "cached_tokens": 5504,
+      "completion_tokens": 1620
+    }
+  ]
+}

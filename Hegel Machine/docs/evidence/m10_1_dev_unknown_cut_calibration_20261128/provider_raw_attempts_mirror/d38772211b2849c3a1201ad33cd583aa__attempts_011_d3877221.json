@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d38772211b2849c3a1201ad33cd583aa",
+  "call_seq": 11,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:27:20.266949+00:00",
+  "ended_at_utc": "2026-11-28T08:27:49.278803+00:00",
+  "request_sha256": "ed8066b3fd867c3634eb388c72e009e4ad7a9ad2778f7ec662c93114dea6f805",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64745,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36195,
+    "cached_tokens": 9344,
+    "completion_tokens": 1118
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/refine.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _bank,_combine,_kernels\\nfrom scipy.linalg import cho_factor,cho_solve\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x,y,z=(s['train'][k] for k in ('x','y','traj')); n=len(x)\\nrng=np.random.default_rng(4416); splits=[np.arange(56,72)]+[v for _ in range(4) for v in np.array_split(rng.permutation(n),5)]\\nr=np.argsort(np.linalg.norm(x-x.mean(0),axis=1)); splits.extend([r[-14:],np.argsort(x[:,0])[-12:],np.argsort(x[:,3])[:12]])\\nfrom collections import defaultdict\\nscores=defaultdict(list)\\nfor v in splits:\\n i=np.setdiff1d(np.arange(n),v); target,l,p,mode=_bank(s,x[i],x[v],y[i],z[i]); ys=_combine(target,l,p,0); zs=_combine(target,l,p,1)[:,None]*mode\\n yr=p['a-rat-5.0'][:,0]; yd=p['bi-dot-1.3'][:,0]; ym=p['bi-mat-2.0'][:,0]; yt=p['raw-mat-1.3'][:,0]\\n za=.4*p['a-tanh-0.5'][:,1]+.3*p['a-sin-0.5'][:,1]+.3*p['b-tanh-0.5'][:,1]\\n candidates={'stack':(ys,zs),'rat':(yr,zs),'ratdot':(.7*yr+.3*yd,zs),'ratmat':(.65*yr+.2*yd+.1*ym+.05*yt,zs),'ratstack':(.65*yr+.35*ys,zs),'ratdiv':(.5*yr+.15*yd+.1*ym+.1*yt+.15*ys,zs),'stateblend':(ys,.55*zs+.45*za[:,None]*mode)}\\n kbank=_kernels(s,np.vstack([x[i],x[v]]),len(i)); m=len(i)\\n time=s['eval_times']; q=-np.expm1(-time[:,None]*s['telemetry_vec'][:2]); u=np.linalg.qr(q)[0]; R=z[i]-np.outer(z[i]@mode,mode); h=u[:,0]-mode*(mode@u[:,0]); h/=np.linalg.norm(h)\\n J=R@h; k=kbank['a-mat-2.0']; w=k[m:,:m]@cho_solve(cho_factor(k[:m,:m]+.15*np.eye(m)),J)\\n for a in (.25,.6): candidates[f'extra-{a}']=(ys,zs+a*np.outer(w,h))\\n for name,(yp,sp) in candidates.items():\\n  e=abs(sp-z[v]); scores[name].append([np.mean(abs(yp-y[v])),e.mean(),e[:,-1].mean()])\\nfor name,e in scores.items():\\n a=np.array(e);print(name,np.round(np.stack([a[0],a[1:-3].mean(0),a[:-3].max(0),a[-3:].mean(0),a[-3:].max(0)]),6).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/refine.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 leave-one-out stacking → H2 rational-led target blend with a separately validated temporal correction; current stress MAEs are 0.065088 for y and 0.015487 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the current stack unchanged\",\"rejected_reason\":\"The calibrated rational kernel beat it on both the standard 56/16 split and the outer-radius target split; fresh folds will test whether that advantage holds.\"}],\"rationale\":\"Compare a small set of target blends on fresh random and boundary splits. Keep the residual temporal mode only if it improves trajectory predictions without degrading terminal-state error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "46bcd8593fdc88019b8921edd0cfae8fe926928e45d0a241455436777c5233ec",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31546.6,
+      "usage_known": true,
+      "prompt_tokens": 36195,
+      "cached_tokens": 9344,
+      "completion_tokens": 1118
+    }
+  ]
+}

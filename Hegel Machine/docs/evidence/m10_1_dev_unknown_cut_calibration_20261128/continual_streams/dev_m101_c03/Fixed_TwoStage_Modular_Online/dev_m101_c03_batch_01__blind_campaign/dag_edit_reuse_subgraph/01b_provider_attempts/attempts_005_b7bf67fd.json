@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b7bf67fdc3834867b986f5dd8f8c8350",
+  "call_seq": 5,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Fixed_TwoStage_Modular_Online__dev_m101_c03_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:00:28.328788+00:00",
+  "ended_at_utc": "2026-11-28T08:01:07.155886+00:00",
+  "request_sha256": "f1d9a3ad936d7a2d97f4ece62bb98e9791220998ea1de2094f96eada35238a0e",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 35507,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25144,
+    "cached_tokens": 9344,
+    "completion_tokens": 1574
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/handoff_probe.py <<'PY'\\nimport itertools\\nimport pickle\\nimport runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nsink = runpy.run_path('/holdout_task/_frozen_nodes/node_01.py')['run_node']\\ndef aff(u): return np.column_stack((np.ones(len(u)), u))\\ndef fit(x,y): return np.linalg.lstsq(x,y,rcond=None)[0]\\ndef rms(a): return np.sqrt(np.mean(a*a))\\na,b,c = (s[k] for k in ('panel_a','panel_b','panel_c'))\\nA=aff(a['u']); av=a['v']; co=fit(A,av)\\nfor _ in range(12):\\n    r=np.linalg.norm(av-A@co,axis=1)\\n    w=1/np.sqrt(1+(r/max(np.median(r),1e-5))**2)\\n    co=fit(A*w[:,None],av*w[:,None])\\nr=np.linalg.norm(av-A@co,axis=1)\\nkeep=np.argsort(r)[:-3]; co=fit(A[keep],av[keep]); print('A sorted tail',np.sort(r)[-7:],'clean RMS',rms(av[keep]-A[keep]@co))\\nx=s['train']['x']; u=np.linalg.solve(co[1:].T,(x-co[0]).T).T\\nux=c['u']; iu,ju=np.triu_indices(4)\\ndef square(u): return np.column_stack((aff(u),u[:,iu]*u[:,ju]))\\np=fit(square(ux),c['v1']); print('v1 coefficients',np.round(p,4))\\nf1=square(u)@p\\n\\ndef cosbasis(u,w): return np.column_stack((aff(u), np.cos(u*w)))\\ndef optimize(us,vs,start,shared):\\n    def r(w):\\n        m=cosbasis(us,w)\\n        return (m@fit(m,vs)-vs).ravel()\\n    return least_squares(r,np.full(1 if shared else 4,start),bounds=(.1,7),gtol=1e-12).x\\nfor shared in (True,False):\\n    for start in (1.,2.5,4.):\\n        w=optimize(ux,c['v2'],start,shared); m=cosbasis(ux,w)\\n        print('v2 cosine',w,'RMS',rms(m@fit(m,c['v2'])-c['v2']))\\nfor shared in (True,False):\\n    loo=[]\\n    for i in range(len(ux)):\\n        k=np.arange(len(ux))!=i; w=optimize(ux[k],c['v2'][k],1.,shared)\\n        loo.append(cosbasis(ux[i:i+1],w)@fit(cosbasis(ux[k],w),c['v2'][k])-c['v2'][i])\\n    print('v2 nested LOO',shared,rms(np.array(loo)))\\nw=optimize(ux,c['v2'],1.,True); f2=cosbasis(u,w)@fit(cosbasis(ux,w),c['v2']); f2q=square(u)@fit(square(ux),c['v2']); f2a=aff(u)@fit(aff(ux),c['v2']); fb=aff(u)@fit(aff(b['u']),b['v'])\\ny=s['train']['y']; tr=s['train']['traj']; t=s['eval_times']; allidx=np.arange(len(y)); folds=[(allidx[:-20],allidx[-20:])]+[(np.setdiff1d(allidx,g),g) for g in np.array_split(allidx,4)]\\nresults=[]\\nfor typ, z in [('cos',f2),('quad',f2q),('aff',f2a)]:\\n    for left,right,label in [(f1,z,'v1v2'),(z,f1,'v2v1'),(fb,z,'bv2'),(f1,fb,'v1b')]:\\n        mixed=(left[:,:,None]*right[:,None,:]).reshape(len(u),16)\\n        choices={'u':u,'b':fb,'1':f1,'2':z}\\n        for n in range(1,5):\\n            for keys in itertools.combinations(choices,n):\\n                linear=np.column_stack((np.ones(len(u)),*(choices[k] for k in keys)))\\n                scores=[]\\n                for train,test in folds:\\n                    idx=np.r_[train,test]\\n                    out=sink({'node_00':dict(n=len(train),linear=linear[idx],mixed=mixed[idx],eval_times=t,y=y[train],traj=tr[train])})\\n                    scores.append((np.mean(abs(out['y_hat']-y[test])),np.mean(abs(out['state_pred']-tr[test]))))\\n                results.append((np.max(scores),typ,label,''.join(keys),scores[0]))\\nfor rec in sorted(results)[:18]: print('worst, v2 basis, mixed order, linear blocks, official:',rec)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/handoff_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine panel C v1 → H2: quadratic v1; calibration leave-one-out RMS fell from 0.89230 to 0.00021, and downstream MAE is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the quadratic basis for both panel C branches\",\n      \"rejected_reason\": \"The fixed-frequency cosine basis already has lower v2 leave-one-out RMS; compare both through the frozen sink before selecting.\"\n    }\n  ],\n  \"rationale\": \"The quadratic v1 fit is near the measurement noise floor. Check v2 frequency stability with frequency fitting inside each calibration fold, then test feature order and linear blocks through the unchanged sink. Both mixed-feature orientation and omitted linear blocks can cause prediction errors despite accurate calibration fits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "b0142af0ea671881d06b282de955eefe0786e08205ffbda2aad0f9b3951b0390",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41287.6,
+      "usage_known": true,
+      "prompt_tokens": 25144,
+      "cached_tokens": 9344,
+      "completion_tokens": 1574
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c578bc3a5e54bb88247092685f3c553",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:18:12.981729+00:00",
+  "ended_at_utc": "2026-11-28T08:18:51.447619+00:00",
+  "request_sha256": "db8b97301944fbe850dbc553c7f669dfb5b8b2210974a4fbabda7d52ddd5bd70",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53467,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33747,
+    "cached_tokens": 9344,
+    "completion_tokens": 1557
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/readout_probe.py <<'PY'\\nfrom probe import *\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.optimize import minimize\\nI=np.arange(len(x)); splits=[I[56:],*np.array_split(np.random.default_rng(18).permutation(len(x)),4),np.argsort(np.linalg.norm(x,axis=1))[-16:]]\\nX=aff(x)@A; R=aff(X)@B; P=poly(R,2); D=cdist(R/R.std(0),R/R.std(0),'sqeuclidean')/4; K=P@P.T+.3*np.exp(-1.3*D)\\ndef metrics(ep):return np.round(np.r_[ep[0],np.mean(ep,0),np.max(ep,0)],5)\\ndef wave(p):return np.c_[np.exp(-p[0]*t)*np.sin(p[1]*t),-np.expm1(-p[2]*t)]\\ndef prep(it):\\n def res(p):\\n  f=wave(p); return (f@fit(f,z[it].T)-z[it].T).ravel()\\n p=least_squares(res,[.2,1.1,.55],bounds=([0,.5,.08],[1,2,2])).x; b=wave(p); a=fit(b,z.T).T; return a,b,p\\nfor base in ('kernel','quadratic'):\\n for mode in ('direct','oracle','joint','state_quad','sparse_den','ridge_den'):\\n  E=[]\\n  for ids in splits:\\n   it=np.setdiff1d(I,ids); F=cho_factor(K[np.ix_(it,it)]+1e-5*np.eye(len(it))); H=K[np.ix_(ids,it)]; a,b,p=prep(it); ah=H@cho_solve(F,a[it]); S=ah@b.T\\n   if base=='quadratic': ah=P[ids]@fit(P[it],a[it]); S=ah@b.T\\n   if mode=='direct': yh=H@cho_solve(F,y[it]) if base=='kernel' else P[ids]@fit(P[it],y[it]);\\n   if mode in ('oracle','joint','state_quad'):\\n    at=a[ids] if mode=='oracle' else ah; w=np.c_[R,a]; wt=np.c_[R[ids],at]; gp=poly(w,2); gt=poly(wt,2)\\n    if mode=='state_quad':\\n     def small(a,r):return np.c_[poly(r,2),poly(a,2)[:,1:]]\\n     gp=small(a,R);gt=small(at,R[ids]);\\n    col=np.sqrt(np.sum(gp[it]**2,axis=0)); G=gp[it]/col; T=gt/col\\n    beta=np.linalg.solve(G.T@G+.0005*np.eye(G.shape[1]),G.T@y[it]); yh=T@beta\\n   if mode in ('sparse_den','ridge_den'):\\n    def one(w):\\n     def calc(h,which):\\n      den=1+(w[which]**2@np.exp(h)); return P[which]/den[:,None]\\n     def cost(h):\\n      g=calc(h,it); e=g@fit(g,y[it])-y[it];return e@e\\n     h=minimize(cost,[-3.]*w.shape[1],bounds=[(-12,0)]*w.shape[1],method='L-BFGS-B').x;g=calc(h,it); return calc(h,ids)@fit(g,y[it]),cost(h)\\n    if mode=='ridge_den':\\n     def fun(h):\\n      d=1+(R[it]@h[:4]+h[4])**2; g=P[it]/d[:,None]; return g@fit(g,y[it])-y[it]\\n     pf=min([least_squares(fun,ini,max_nfev=80) for ini in np.r_[np.eye(5)*.4,np.ones((1,5))*.1]],key=lambda rr:rr.cost);h=pf.x;yh=(P[ids]@fit(P[it]/(1+(R[it]@h[:4]+h[4])**2)[:,None],y[it]))/(1+(R[ids]@h[:4]+h[4])**2)\\n    else: yh,_=min([one(w) for w in (x,q,r,R)],key=lambda pair:pair[1]);\\n   E.append([abs(yh-y[ids]).mean(),abs(S-z[ids]).mean(),abs(S[:,-1]-z[ids,-1]).mean()]);\\n  print(base,mode,metrics(E))\\na,b,p=prep(I);print('wave',p,'coefficient stats',a.mean(0),a.std(0)); print('channel correlations',np.corrcoef(np.c_[y,a].T));\\nfor w in (x,q,r,R):\\n f=poly(w,2); e=np.c_[y,a]-f@fit(f,np.c_[y,a]); print('quadratic residual cross',np.round(np.corrcoef(e.T),3));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine panel transforms and rank-two dynamics → H2 coupled or rational readout; the best tested scalar kernel reached 0.0566 worst-slice MAE, with trajectory and terminal-state MAEs of 0.0147 and 0.0186.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Treat the best panel kernel as the physical law\",\"rejected_reason\":\"Its prediction error improved, but this does not identify a mechanism or establish which panels are active.\"}],\"rationale\":\"Test whether the scalar can be reconstructed from the trajectory amplitudes or a quadratic-over-rational law. The oracle-amplitude comparison distinguishes a failed readout from errors in predicted amplitudes; only non-oracle models can be promoted.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "82d51237b977ac18014dcda473574a7da98f547beee5898e14fb734ff8f9f61f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40919.96,
+      "usage_known": true,
+      "prompt_tokens": 33747,
+      "cached_tokens": 9344,
+      "completion_tokens": 1557
+    }
+  ]
+}

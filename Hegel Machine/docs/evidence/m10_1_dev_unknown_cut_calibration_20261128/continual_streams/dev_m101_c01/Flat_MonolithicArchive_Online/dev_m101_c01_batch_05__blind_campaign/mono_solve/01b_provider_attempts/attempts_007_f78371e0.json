@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f78371e08f094eaea0db00dc8fa5fc38",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:16:22.904444+00:00",
+  "ended_at_utc": "2026-11-28T08:16:54.023193+00:00",
+  "request_sha256": "707c750fb1958af58e07bdbc0d4dd187d5849532653867e8e7ab62072a6a021f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41782,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28325,
+    "cached_tokens": 9344,
+    "completion_tokens": 1070
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/kernel_probe.py <<'PY'\\nfrom probe import *\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.optimize import minimize\\nfrom scipy.spatial.distance import cdist\\nrng=np.random.default_rng(18)\\nsplits=[np.arange(56,72),*np.array_split(rng.permutation(72),4),np.argsort(np.linalg.norm(x,axis=1))[-16:]]\\noutputs=np.c_[y,z@v[:2].T]\\nfor name,w in [('raw',x),('cal',q),('forward',r),('inverse',(q-B[0])@np.linalg.inv(B[1:])),('both',np.c_[r,(q-B[0])@np.linalg.inv(B[1:])])]:\\n d=(w[:,None]-w[None,:])**2; p2=poly(q,2); P=p2@p2.T\\n for kind in ('iso','ard','add','mix'):\\n  errors=[]; pars=[]\\n  for ids in splits:\\n   it=np.setdiff1d(np.arange(len(x)),ids); pred=[]\\n   for col in range(3):\\n    target=outputs[it,col]; n=w.shape[1] if kind!='iso' else 1\\n    def k(h):\\n     d2=d*np.exp(h[:n]); iso=np.exp(-d2.sum(-1)); add=np.exp(-d2).mean(-1)\\n     return P+np.exp(h[n])*(add if kind=='add' else .5*(iso+add) if kind=='mix' else iso)\\n    def objective(h):\\n     K=k(h)[np.ix_(it,it)]; K.flat[::len(it)+1]+=np.exp(h[-1]); f=cho_factor(K); return .5*target@cho_solve(f,target)+np.log(np.diag(f[0])).sum()+.15*np.sum((h[:n]-h[:n].mean())**2)\\n    h=minimize(objective,[-1.5]*n+[-1,-8],bounds=[(-7,2)]*n+[(-8,4),(-13,-3)],method='L-BFGS-B',options={'maxiter':55}).x\\n    K=k(h); f=cho_factor(K[np.ix_(it,it)]+np.exp(h[-1])*np.eye(len(it))); pred.append(K[np.ix_(ids,it)]@cho_solve(f,target)); pars.append(h)\\n   pred=np.array(pred).T; e=abs(pred[:,0]-y[ids]); state=pred[:,1:]@v[:2]; errors.append([e.mean(),abs(state-z[ids]).mean(),abs(state[:,-1]-z[ids,-1]).mean()]);\\n  print(name,kind,'gate',np.round(errors[0],5),'mean',np.round(np.mean(errors,0),5),'worst',np.round(np.max(errors,0),5),'params',np.round(pars[:3],2).tolist(),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/kernel_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated coordinate rotations → H2 structured residuals over a quadratic readout; the direct Panel C feature fits have worst-split trajectory MAE around 0.016 or higher.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use Panel C outputs as a direct linear readout\",\n      \"rejected_reason\": \"Panel-only predictability did not translate into accurate held-out scalar or trajectory predictions; this does not rule out a downstream composition.\"\n    }\n  ],\n  \"rationale\": \"Compare isotropic, coordinate-selective and additive residuals, refitting hyperparameters inside each split. A high-radius holdout tests whether gains survive extrapolation; report terminal-state error separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "0a7f8965ec3a111ff8dbe76cb512e1156385d7b137b659fa4c2b2ed443ab3231",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31076.76,
+      "usage_known": true,
+      "prompt_tokens": 28325,
+      "cached_tokens": 9344,
+      "completion_tokens": 1070
+    }
+  ]
+}

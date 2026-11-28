@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7c2919ec248a41b8a2ae71f56e8e3937",
+  "call_seq": 5,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c01_batch_05__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:23:23.123629+00:00",
+  "ended_at_utc": "2026-11-28T08:23:54.417387+00:00",
+  "request_sha256": "755ca9b1e3dcd022a7a96977278dbeba271b473cf185827dadebb4f96bf44e8b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 36679,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25280,
+    "cached_tokens": 9344,
+    "completion_tokens": 1236
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*02_solver.py; cat > /tmp/features05.py <<'PY'\\nexec(open('/tmp/probe05.py').read().split('p=temp(z[:56])')[0])\\ndef poly(q,k): return np.column_stack([np.ones(len(q))]+[np.prod(q[:,ii],axis=1) for j in range(1,k+1) for ii in combinations_with_replacement(range(q.shape[1]),j)])\\nfor name in ('v1','v2'):\\n u=s['panel_c']['u']; target=s['panel_c'][name]; P=poly(u,2)\\n print('C panel',name,'quad rms',np.std(P@np.linalg.lstsq(P,target,rcond=None)[0]-target))\\n for k in range(1,5):\\n  uv=np.concatenate([u,np.sin(k*u),np.tanh(k*u)],axis=1); f=np.c_[P,uv[:,4:]]; coef=np.linalg.lstsq(f,target,rcond=None)[0]; h=np.linalg.svd(f,full_matrices=False)[0]; err=(f@coef-target)/np.maximum(1e-9,1-np.sum(h*h,axis=1))[:,None]; print(k, np.mean(abs(err)))\\nq=a(x); coords={'A':q,'BA':b(q),'B':b(x),'AB':a(b(x)),'C':c(q),'D':d(q)}\\nrng=np.random.default_rng(47); folds=[(np.arange(56),np.arange(56,72))]+[(r[:56],r[56:]) for r in (rng.permutation(72) for _ in range(5))]\\nfor label in ['direct','amp-assisted']:\\n out={}\\n for i,j in folds:\\n  p=temp(z[i]); v=amp(z,p); Y=np.c_[y,v]; F=poly(q,2)\\n  if label=='amp-assisted': F=np.c_[F,v]\\n  def run(key,f):\\n   f=f.copy(); f[:,1:]/=np.maximum(f[i,1:].std(axis=0),1e-8); A=f[i]; beta=np.linalg.solve(A.T@A+1e-4*np.eye(f.shape[1]),A.T@Y[i]); out.setdefault(key,[]).append(abs(f[j]@beta-Y[j]).mean(0))\\n  run('quadratic',F)\\n  for name,w in coords.items():\\n   for k in (.5,1,1.5,2):\\n    for fn in (np.sin,np.tanh,np.cos):\\n     g=fn(k*w); run((name,fn.__name__,k),np.c_[F,g,w*g]); run((name,fn.__name__,k,'cross'),np.c_[F,g,*(g*w[:,h:h+1] for h in range(4))])\\n  if label=='amp-assisted':\\n   run('amp^2',np.c_[F,*(v[:,h:h+1]*v[:,h:] for h in range(2))]); run('amp-x',np.c_[F,*(v[:,h:h+1]*q for h in range(2))]); run('amp-x^2',np.c_[F,*(v[:,h:h+1]*q for h in range(2)),*(v[:,h:h+1]*v[:,h:] for h in range(2))])\\n print(label)\\n for u in range(3 if label=='direct' else 1):\\n  for k,e in sorted(out.items(),key=lambda ke:np.mean(np.array(ke[1])[:,u]))[:8]:\\n   e=np.array(e)[:,u];print(u,k,'first/mean/worst',e[0],e.mean(),e.max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/features05.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 input-only quadratic → H2 panel-coordinate interactions or shared trajectory-amplitude readout; 56/16 quadratic target MAE is 0.06074 and two-mode held-out reconstruction MAE is 0.00410.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Increase polynomial degree without structure\",\"rejected_reason\":\"Cubic and quartic fits lower training error but raise held-out target MAE to 0.08861 and 0.13026.\"}],\"rationale\":\"Screen pairwise products and panel-aligned harmonic features across multiple splits. Using measured held-out amplitudes is diagnostic only: it tests whether a shared readout is worth pursuing before relying on predicted amplitudes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d3f39290e6f12b6e976ae994e895d8ec10c8e185f144b900fffdbeafeb1722d6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33864.66,
+      "usage_known": true,
+      "prompt_tokens": 25280,
+      "cached_tokens": 9344,
+      "completion_tokens": 1236
+    }
+  ]
+}

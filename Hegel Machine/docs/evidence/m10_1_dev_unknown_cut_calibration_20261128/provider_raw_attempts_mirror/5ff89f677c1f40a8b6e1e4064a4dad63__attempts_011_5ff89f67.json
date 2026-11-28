@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5ff89f677c1f40a8b6e1e4064a4dad63",
+  "call_seq": 11,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Fixed_TwoStage_Modular_Online__dev_m101_c01_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:31:33.302753+00:00",
+  "ended_at_utc": "2026-11-28T08:31:59.592231+00:00",
+  "request_sha256": "e87e9eb496348e3a5ed808c63505cc4c93afb7a2b9da14940c19215c5121d9c6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70243,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39733,
+    "cached_tokens": 5504,
+    "completion_tokens": 1021
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/eval_candidate.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nP='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('candidate',P); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,z=(tr[k] for k in ('x','y','traj'))\\nss=[('fixed',np.arange(72)),*[(f'random-{seed}',np.random.default_rng(seed).permutation(72)) for seed in (4,91,133,287)],('high-radius',np.argsort((x*x).sum(1))),('far-neighbor',np.argsort(np.sort(((x[:,None,:]-x[None,:,:])**2).sum(2),axis=1)[:,3]))]\\na=[]\\nfor label,ix in ss:\\n i,j=ix[:56],ix[56:]; v=m.solve_batch({**s,'train':{**tr,**{k:tr[k][i] for k in ('x','y','traj')}},'test':{'x':x[j]}}); yp,zp=v['y_hat'],v['state_pred']; end=zp[:,-1]; assert np.allclose(v['diagnostics_vec'],[yp.mean(),yp.std(),end.mean(),end.std()],rtol=0,atol=1e-13); e=np.abs(zp-z[j]); f=[np.mean(abs(yp-y[j])),e.mean(),e[:,-1].mean(),e.mean(0).max()]; a.append(f); print(label,np.round(f,6))\\nprint('worst (scalar, trajectory, endpoint, worst horizon)',np.round(np.max(a,axis=0),6))\\nv=m.solve_batch(s); assert all(np.isfinite(u).all() for u in v.values()); print('actual shapes',{k:w.shape for k,w in v.items()})\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/eval_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 sparse nonlinear projections → H2 calibrated kernel blend with separate relaxation dynamics; previous worst-slice MAEs were 0.05148 scalar and 0.01315 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the three-ridge scalar readout\",\"rejected_reason\":\"The fixed split improved for tanh, but the high-radius error rose to 0.07193; the other ridge families did not consistently improve both slices.\"}],\"rationale\":\"Run the exact artifact in isolation on fresh randomized and geometry-based holdouts. Audit the endpoint, worst horizon, and diagnostics separately so trajectory averages cannot hide a contract or horizon failure.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "e8b38a542e357242ec8332e805a7dc476a3c58289df08864df1a4bd06236bad3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28821.97,
+      "usage_known": true,
+      "prompt_tokens": 39733,
+      "cached_tokens": 5504,
+      "completion_tokens": 1021
+    }
+  ]
+}

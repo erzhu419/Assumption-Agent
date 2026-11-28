@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cb363f2072ad4403bac94bbf1f53fe8e",
+  "call_seq": 6,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:16:10.212610+00:00",
+  "ended_at_utc": "2026-11-28T08:16:48.147044+00:00",
+  "request_sha256": "0d34bd6e5c51fcdcd547e4e096551c82b3811c93c4aabb798157a4d36022ff92",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42235,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26367,
+    "cached_tokens": 9344,
+    "completion_tokens": 1518
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/^ops={}/,$d' /tmp/graph.py >/tmp/operators.py; cat >>/tmp/operators.py <<'PY'\\nfrom scipy.special import erf\\nfrom scipy.optimize import minimize_scalar\\nforms={'tanh':np.tanh,'atan':np.arctan,'asinh':np.arcsinh,'erf':erf,'softsign':lambda x:x/(1+abs(x)),'sqrtsoft':lambda x:x/np.sqrt(1+x*x),'rat':lambda x:x/(1+x*x),'clip':lambda x:np.clip(x,-1,1),'log':lambda x:np.sign(x)*np.log1p(abs(x)),'gauss':lambda x:-np.expm1(-x*x),'sqrtrise':lambda x:np.sqrt(1+x*x)-1,'sqrat':lambda x:x*x/(1+x*x),'cos':lambda x:1-np.cos(x),'sin':np.sin,'atan2':lambda x:np.arctan(x*x),'log2':lambda x:np.log1p(x*x),'elu':lambda x:np.expm1(np.minimum(x,0))+np.maximum(x,0)}\\ndef search(u,v,kind,linear,shift=False):\\n g=forms[kind]\\n def design(x,p):\\n  G=g(p[0]*x+(p[1] if shift else 0)); return a(np.c_[x,G] if linear else G)\\n def err(p):\\n  D=design(u,p); return (D@ls(D,v)-v).ravel()\\n p=least_squares(err,[1.,0.] if shift else [1.],bounds=([.03,-2] if shift else [.03],[8.,2] if shift else [8.]),max_nfev=90).x\\n C=ls(design(u,p),v); return np.mean(abs(err(p))),p,C,lambda x:design(x,p)@C\\nops={}\\nfor tag,out in [('c','v1'),('d','v2')]:\\n u=s['panel_c']['u'];v=s['panel_c'][out]; rows=[]\\n for kind in forms:\\n  for lin in (False,True):\\n   for shift in (False,True):\\n    e,p,C,f=search(u,v,kind,lin,shift); rows.append((e,kind,lin,shift,p,C,f))\\n for _,kind,lin,shift,p,C,f in sorted(rows,key=lambda r:r[0])[:9]:\\n  es=[]\\n  for i in range(4):\\n   m=np.arange(len(u))%4!=i; ff=search(u[m],v[m],kind,lin,shift)[-1];es.append(np.mean(abs(ff(u[~m])-v[~m])))\\n  print(tag,kind,lin,shift,'fit',_, 'cv',np.mean(es),'p',p,'coef',C.round(4).tolist())\\n ops[tag]=min(rows,key=lambda r:r[0])[-1]\\nb,p,e=fit(s['panel_b']['u'],s['panel_b']['v'],'gate'); ops['b']=b\\nprint('B fit',e,'params',p,'coefs',ls(a(gate(s['panel_b']['u'],p)),s['panel_b']['v']).round(4))\\nprint('telemetry',s['telemetry_vec'],'summary',tr['summary']); print('y range',Y[:,0].min(),Y[:,0].max())\\nt=s['eval_times'];T=tr['traj'];\\ndef timebasis(p):return -np.expm1(-t[:,None]*p)\\ndef r(p):\\n h=timebasis(p);return (h@ls(h,T.T)-T.T).ravel()\\nq=least_squares(r,[.4,1.8],bounds=(.01,30.)).x\\nprint('rates',q,'MAE',np.mean(abs(r(q)))); amp=ls(timebasis(q),T.T).T; print('amplitude quantiles',np.quantile(amp,[0,.25,.5,.75,1],axis=0))\\nfor tag,g in {'x':lambda x:x,**ops}.items():\\n z=g(x[:72]); print(tag,'corr rows x-/plus-amp-and-y',np.corrcoef(np.c_[z,amp,Y[:,0]].T)[:4,4:].round(3).tolist())\\nfor i in range(15):print(i,np.round(x[i],3),np.round(amp[i],3),round(Y[i,0],3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/operators.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (simple panel composition) -> H2 (recover compact panel laws and isolate the two trajectory amplitudes); current worst fold MAEs are 0.16827 for scalar and 0.15987 for trajectory, from separate regressions.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the best separate regressions immediately\",\n      \"rejected_reason\": \"Their worst-fold errors remain large; the near-exact panel B fit and rank-two trajectories give independently testable structure.\"\n    }\n  ],\n  \"rationale\": \"Refit compact auxiliary operators on held-out panel rows to distinguish true operator structure from interpolation. Profile the two relaxation rates separately to see whether the bottleneck is the temporal basis or the mapping from inputs to mode amplitudes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "abc8bb60e85d5275554c48a022492033d554503cdf943ca7150fcbe569bb6663",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40412.85,
+      "usage_known": true,
+      "prompt_tokens": 26367,
+      "cached_tokens": 9344,
+      "completion_tokens": 1518
+    }
+  ]
+}

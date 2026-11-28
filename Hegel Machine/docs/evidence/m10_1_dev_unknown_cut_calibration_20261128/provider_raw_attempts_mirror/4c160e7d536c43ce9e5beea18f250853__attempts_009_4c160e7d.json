@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4c160e7d536c43ce9e5beea18f250853",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Fixed_TwoStage_Modular_Online__dev_m101_c01_batch_05__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:21:02.628706+00:00",
+  "ended_at_utc": "2026-11-28T08:21:39.938666+00:00",
+  "request_sha256": "3d282988c3a64435d5c277a4e227e06b5a8e7d2b43b64f9e8703c6001f91aa47",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62605,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37877,
+    "cached_tokens": 9344,
+    "completion_tokens": 1455
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"grep '^time' /tmp/probe.log 2>/dev/null || OPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py | grep '^time'; grep -E '^(y|z) ' /tmp/ridgeprobe.log; cat > /tmp/separable.py <<'PY'\\nfrom spatial import *\\nfrom scipy.special import erf\\nfrom itertools import product\\np=s['panel_c']; u=p['u'];\\nfor k in ['v1','v2']:\\n v=p[k]; forms={'tanh':lambda q,a:np.tanh(a*q),'erf':lambda q,a:erf(a*q),'atan':lambda q,a:np.arctan(a*q),'asinh':lambda q,a:np.arcsinh(a*q),'sin':lambda q,a:np.sin(a*q),'cos':lambda q,a:np.cos(a*q),'logcosh':lambda q,a:np.logaddexp(a*q,-a*q),'gauss':lambda q,a:np.exp(-(a*q)**2),'rat':lambda q,a:1/(1+(a*q)**2)}\\n for nm,f in forms.items():\\n  am=np.linspace(.5,5,20)\\n  def model(a,q): return np.c_[np.ones(len(q)),q,f(q,a)]\\n  def res(a):\\n   M=model(a[0],u); return (M@L(M,v)-v).ravel()\\n  r=min([least_squares(res,[a],bounds=(.15,8)) for a in am[::4]],key=lambda r:r.cost)\\n  print(k,nm,r.x,np.std(r.fun))\\n for nm,fn,ini in [('tanh+sin',lambda q,a:np.tanh(a[0]*q)+a[1]*np.sin(a[2]*q),[2.,.2,2.]),('erf+sin',lambda q,a:erf(a[0]*q)+a[1]*np.sin(a[2]*q),[1.5,.2,2.]),('tanh+atan',lambda q,a:np.tanh(a[0]*q)+a[1]*np.arctan(a[2]*q),[1.5,.2,3.]),('cos+cos',lambda q,a:np.cos(a[0]*q)+a[1]*np.cos(a[2]*q),[1.1,.01,4]),('cos+q2',lambda q,a:np.cos(a[0]*q)+a[1]*q*q,[2.,.2,1.]),('tanh+q3',lambda q,a:np.tanh(a[0]*q)+a[1]*q**3,[2.,.1,1.])]:\\n  def res(a):\\n   M=np.c_[np.ones(len(u)),u,fn(u,a)];return (M@L(M,v)-v).ravel()\\n  r=min([least_squares(res,[a,b,c],bounds=([.15,-10,.15],[8,10,8]),max_nfev=150) for a,b,c in [ini]+list(product([1.,2.5,4.],[-.25,.25],[1.,2.5,4.]))],key=lambda r:r.cost)\\n  print(k,nm,np.round(r.x,5),np.std(r.fun))\\nU,S,V=np.linalg.svd(z,full_matrices=False); R=np.c_[y,(U[:,:2]*S[:2])]; print('noise',np.std(z-(U[:,:2]*S[:2])@V[:2]));\\nfor nm,q in coords(x).items():\\n def gr(q):\\n  Q=phi(q,2);return np.c_[Q,np.sin(1.7*q),np.cos(1.7*q),np.tanh(1.7*q),np.arctan(2.3*q),np.cos(1.28*q)]\\n for reg in [.01,.1,1.]:\\n  M=gr(q); es=[]\\n  for J in [np.arange(56,72),np.arange(16),np.arange(28,44),np.argsort(np.linalg.norm(x,axis=1))[-16:]]:\\n   I=np.setdiff1d(np.arange(len(x)),J); X=M/np.maximum(M[I].std(0),.05); X[:,0]=1; Q=X[I]; co=np.linalg.solve(Q.T@Q+reg*np.eye(Q.shape[1]),Q.T@R[I]); pred=X[J]@co; es.append([np.mean(abs(pred[:,0]-y[J])),np.mean(abs(pred[:,1:]@V[:2]-z[J]))]);\\n  print(nm,reg,np.asarray(es).round(5).T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/separable.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 flexible shared ridges -> H2 separable operator corrections; the best panel-informed worst-slice MAEs so far are 0.0582 for y and 0.0122 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the joint unconstrained ridge model\",\"rejected_reason\":\"Even the best joint variants have high-norm combined MAE near 0.028; the outputs may require different spatial features.\"}],\"rationale\":\"Recover the complete time-basis and separate-output results from the truncated logs. Test whether compact coordinatewise operators explain the panel observations or improve either held-out output enough to select them over the regularized kernel candidates.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "ca73362f7b367f3e94b105b7e29733fca2b1570bd7de4435c50b3fbded27dfc1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39812.25,
+      "usage_known": true,
+      "prompt_tokens": 37877,
+      "cached_tokens": 9344,
+      "completion_tokens": 1455
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "465abca7ab2149e6a88d4c739982f149",
+  "call_seq": 10,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:18:51.315526+00:00",
+  "ended_at_utc": "2026-11-28T08:19:33.137530+00:00",
+  "request_sha256": "982613731cf3dfb312d5d309ccf62df26f4b8b051a2be103f45453113286146d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59746,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36302,
+    "cached_tokens": 9344,
+    "completion_tokens": 1687
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _coordinates(study, x):\\n    panel = study['panel_a']\\n    design = _affine(panel['u'])\\n    mask = np.ones(len(design), dtype=bool)\\n    for _ in range(5):\\n        a = _fit(design[mask], panel['v'][mask])\\n        err = np.linalg.norm(panel['v'] - design @ a, axis=1)\\n        mask = err <= max(3 * np.median(err), 1e-12)\\n    panel = study['panel_b']\\n    b = _fit(_affine(panel['u']), panel['v'])\\n    return _affine(_affine(x) @ a) @ b\\n\\n\\ndef _quadratic(x):\\n    return np.column_stack((_affine(x), *(x[:, j] * x[:, k]\\n        for j, k in combinations_with_replacement(range(x.shape[1]), 2))))\\n\\n\\ndef _temporal_basis(t, trajectories):\\n    def basis(p):\\n        return np.column_stack((np.exp(-p[0] * t) * np.sin(p[1] * t),\\n                                -np.expm1(-p[2] * t)))\\n\\n    def residual(p):\\n        b = basis(p)\\n        return (b @ _fit(b, trajectories.T) - trajectories.T).ravel()\\n\\n    p = least_squares(residual, [0.2, 1.1, 0.55],\\n                      bounds=([0, 0.5, 0.08], [1, 2, 2])).x\\n    return basis(p)\\n\\n\\ndef _kernel(left, right, scale):\\n    d = cdist(left / scale, right / scale, 'sqeuclidean') / left.shape[1]\\n    return _quadratic(left) @ _quadratic(right).T + 0.3 * np.exp(-1.3 * d)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    r = _coordinates(study, np.vstack((train['x'], study['test']['x'])))\\n    x, xt = r[:n], r[n:]\\n    scale = x.std(axis=0)\\n    b = _temporal_basis(study['eval_times'], train['traj'])\\n    target = np.column_stack((train['y'], _fit(b, train['traj'].T).T))\\n    gram = _kernel(x, x, scale) + np.eye(n) * 1e-5\\n    pred = _kernel(xt, x, scale) @ cho_solve(cho_factor(gram), target)\\n    y, state = pred[:, 0], pred[:, 1:] @ b.T\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\ncat > /tmp/solver_cv.py <<'PY'\\nimport importlib.util, pickle, sys\\nimport numpy as np\\npath = sys.argv[1] if len(sys.argv) > 1 else '/holdout_task/batch_solver.py'\\nspec = importlib.util.spec_from_file_location('solver', path)\\nmod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nt = s['train']; x, y, z = (t[k] for k in ('x','y','traj'))\\nix = np.arange(len(x))\\nsplits = [('gate', ix[56:]), *[(f'fold{i+1}', a) for i,a in enumerate(np.array_split(np.random.default_rng(18).permutation(ix),4))], ('high-radius', np.argsort(np.linalg.norm(x, axis=1))[-16:])]\\nif '--extra' in sys.argv:\\n    splits += [(f'edge{j}{tag}', np.argsort(sign*x[:,j])[-16:]) for j in range(4) for tag,sign in (('+',1),('-',-1))]\\ne = []\\nfor name, hold in splits:\\n    it = np.setdiff1d(ix, hold)\\n    tr = dict(x=x[it], y=y[it], traj=z[it], summary=np.array([y[it].mean(), y[it].std(), z[it,-1].mean(), z[it,-1].std()]))\\n    out = mod.solve_batch(dict(s, train=tr, test={'x':x[hold]}))\\n    ey, ez = abs(out['y_hat']-y[hold]), abs(out['state_pred']-z[hold]); m=[ey.mean(), ez.mean(), ez[:,-1].mean()]; e.append(m)\\n    print(name, np.round(m,6), 'time MAE', np.round(ez.mean(0),5))\\nprint('mean', np.mean(e,0), 'worst', np.max(e,0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I /tmp/solver_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated and rotated coordinates with a quadratic-plus-Gaussian kernel → H2 direct scalar and damped rank-two trajectory predictions; prototype worst-slice MAEs are 0.05657, 0.01082, and 0.01654 for scalar, trajectory, and terminal state.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the tested rational or trajectory-coupled scalar readout\",\n      \"rejected_reason\": \"Neither beat the direct scalar kernel; even the quadratic readout given observed amplitudes reached only 0.11661 worst-slice scalar MAE.\"\n    }\n  ],\n  \"rationale\": \"Save the best validated model, then replay its splits from the actual deliverable. This will catch any loss caused by moving preprocessing into the training fold or by integrating the two predictors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e7fbc498d2cb6eb1d5db17dfe2a3d5ef4677f52de0a1e0092b1670bf61bce1a4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44341.11,
+      "usage_known": true,
+      "prompt_tokens": 36302,
+      "cached_tokens": 9344,
+      "completion_tokens": 1687
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "122eb14720bb4673b899e4df3dba9fdf",
+  "call_seq": 5,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Flat_MonolithicArchive_Online__dev_m101_c02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:00:01.046819+00:00",
+  "ended_at_utc": "2026-11-28T08:00:36.859831+00:00",
+  "request_sha256": "23f9b44cb487913575d56a3c6f88639e9ca9793d9af2aa84664375ec70862c8f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43576,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27254,
+    "cached_tokens": 9344,
+    "completion_tokens": 1434
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/graph101.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations,product\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['eval_times']; tr=s['train']; x=tr['x']; Y=np.c_[tr['y'],tr['traj']]; L=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]; O=lambda x:np.c_[np.ones(len(x)),x]; np.set_printoptions(precision=4,suppress=True)\\na=s['panel_a']; g=np.max(abs(a['u']-a['v']),axis=1)<1; off,sc=np.stack([L(O(a['u'][g,k:k+1]),a['v'][g,k]) for k in range(4)]).T\\nop={}; rng=np.random.default_rng(45); folds=[(np.arange(56),np.arange(56,72))]+[(i[16:],i[:16]) for i in [rng.permutation(72) for _ in range(5)]]\\nfor key,p,v in [('B','panel_b','v'),('C','panel_c','v1'),('D','panel_c','v2')]:\\n u=s[p]['u']; z=s[p][v]; scores=[]\\n for name,f in [('tanh',np.tanh),('atan',np.arctan),('sin',np.sin),('cos',lambda h:1-np.cos(h)),('rat',lambda h:h/(1+h*h)),('soft',lambda h:h/np.sqrt(1+h*h))]:\\n  F=lambda a,k:np.c_[O(a),f(a*k)]; r=least_squares(lambda k:(F(u,k)@L(F(u,k),z)-z).ravel(),[1.3],bounds=(.15,4)).x; c=L(F(u,r),z); scores.append((np.mean(abs(F(u,r)@c-z)),name,r,c,f));\\n for err,n,r,c,_ in sorted(scores)[:3]:print(key,n,err,r,'linear to nonlinear row ratios',np.sum(c[1:5]*c[5:9],1)/np.sum(c[5:9]**2,1),'proportional residual',np.linalg.norm(c[1:5]-np.sum(c[1:5]*c[5:9],1)[:,None]/np.sum(c[5:9]**2,1)[:,None]*c[5:9]));\\n err,n,r,c,f=min(scores,key=lambda h:h[0]); op[key]=lambda a,r=r,c=c,f=f:np.c_[O(a),f(a*r)]@c\\n print(key,'coeff',c)\\ncoords={'x':x,'inv':(x-off)/sc,'fwd':x*sc+off}; zz={**coords}\\nfor n,u in coords.items():\\n for k,f in op.items():\\n  zz[k+n]=f(u)\\n  for l,h in op.items():zz[l+k+n]=h(f(u))\\ndef phi(u,m):\\n if m==0:return O(u)\\n if m==1:return np.c_[O(u),*[u[:,i]*u[:,j] for i,j in combinations(range(4),2)]]\\n if m==2:return np.c_[phi(u,1),u*u]\\n if m==3:return np.c_[O(u),u[:,0]*u[:,2]+u[:,1]*u[:,3]]\\n if m==4:return np.c_[O(u),np.tanh(u)]\\nresults=[]\\nfor n,u in zz.items():\\n for m in range(5):\\n  A=phi(u,m); errors=[]\\n  for i,j in folds:\\n   E=abs(A[j]@L(A[i],Y[i])-Y[j]); errors.append([E[:,0].mean(),E[:,1:].mean()]);\\n  results.append((n,m,np.array(errors)))\\nfor k in range(2):\\n print('target',k,[(n,m,round(e[0,k],5),round(max(e[:,k]),5)) for n,m,e in sorted(results,key=lambda h:np.mean(h[2][:,k]))[:12]])\\nfams={'exp':lambda k:-np.expm1(-k*t),'rat':lambda k:t/(1+k*t),'log':lambda k:np.log1p(k*t),'sqrt':lambda k:np.sqrt(1+k*t)-1,'t':lambda k:t,'t2':lambda k:t*t}\\nZ=Y[:,1:]; o=[]\\nfor a,b in combinations(fams,2):\\n def res(k):\\n  T=np.column_stack((fams[a](k[0]),fams[b](k[1]))); return (T@L(T,Z.T)-Z.T).ravel()\\n r=min([least_squares(res,start,bounds=(.005,12)) for start in [[.5,1.5],[1.5,.5],[3,3]]],key=lambda q:q.cost); o.append((np.sqrt(np.mean(r.fun**2)),a,b,r.x))\\nprint('optimized time pairs',sorted(o)[:9])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph101.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 direct nonlinear regression → H2 composed panel operators with a shared two-mode trajectory; the best direct baseline has worst-split MAEs of 0.03009 for y and 0.04168 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Treat all panels as active\",\"rejected_reason\":\"Only a held-out response improvement would justify including an auxiliary panel in the prediction graph.\"}],\"rationale\":\"Test whether either response simplifies after inverse calibration and panel composition. Compare scalar and trajectory errors separately, and profile temporal rates to see which two-mode laws reach the observed noise floor.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "ff63301d7d0c6116e930262e826082e05948c3831dabc95b98c0e85a0f869992",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38357.23,
+      "usage_known": true,
+      "prompt_tokens": 27254,
+      "cached_tokens": 9344,
+      "completion_tokens": 1434
+    }
+  ]
+}

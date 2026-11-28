@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6b935fa7a1b24aa79907aebbdb016aa5",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:02:27.074154+00:00",
+  "ended_at_utc": "2026-11-28T08:03:05.415179+00:00",
+  "request_sha256": "2bc803e38ab34a91549eb0dd3fb0a53f0cb5f67134b59b22cfa309bde5c1d27a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55163,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34393,
+    "cached_tokens": 9344,
+    "completion_tokens": 1643
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/dev_m101_c04_batch_00_solver.py; cat /holdout_task/validate_public_schema.py; cat > /tmp/refine.py <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nm = runpy.run_path('/tmp/hegel_continual_archive/dev_m101_c04_batch_00_solver.py')\\nt = s['train']; y, T = t['y'], t['traj']; cal = m['_calibration'](s)\\nz = m['_coordinates'](t['x'], cal); c = m['_cross'](z); D = np.c_[z,c]; X = np.c_[np.ones(len(z)),D]\\nls = lambda x,y: np.linalg.lstsq(x,y,rcond=None)[0]\\nrng = np.random.default_rng(44039); n = len(y)\\nsplits = [(np.arange(56), np.arange(56,n))]\\nfor _ in range(12):\\n    j = rng.permutation(n); splits.append((j[:56],j[56:]))\\nfor h in [np.linalg.norm(z,axis=1), *z.T, *(-z).T, abs(c)]:\\n    j = np.argsort(h); splits.append((j[:56],j[56:]))\\nfor name in ['sqrt_shared','sqrt_shared_shift','sqrt_through','tanh_shared','tanh_through','power_shared','power_through']:\\n    all_err = []; fit = []\\n    for a,b in splits:\\n        def design(p,i):\\n            h = D[i] @ p[:5]\\n            if name.endswith('shift') or name.endswith('through'): h = h+p[5]\\n            if name.startswith('tanh'): f = np.tanh(h)\\n            elif name.startswith('power'):\\n                power = p[-1]; f = h/(1+abs(h)**power)**(1/power)\\n            else: f = h/np.sqrt(1+h*h)\\n            if name.endswith('through'): return np.c_[X[i],f]\\n            return np.c_[D[i] @ p[:5], f]\\n        def residual(p):\\n            M = design(p,a); return M@ls(M,y[a])-y[a]\\n        seed = ls(D[a],y[a]); k = 5+int(name.endswith(('shift','through')))\\n        lo, hi = np.full(k,-8.),np.full(k,8.)\\n        if name.startswith('power'): lo, hi = np.r_[lo,1.2], np.r_[hi,4.]\\n        cand = []\\n        for gain in [.65,1.,1.5]:\\n            p = np.r_[gain*seed,np.zeros(k-5)]\\n            if name.startswith('power'): p = np.r_[p,2.]\\n            cand.append(least_squares(residual,p,bounds=(lo,hi),max_nfev=100))\\n        r = min(cand,key=lambda f:f.cost); w = ls(design(r.x,a),y[a]); e = abs(design(r.x,b)@w-y[b]); all_err.append(e.mean());fit.append((r.x,w,np.sqrt(np.mean(r.fun**2))))\\n    print(name,'canonical / random worst / stress worst',*[round(i,6) for i in (all_err[0],max(all_err[1:13]),max(all_err[13:]))], 'fit',tuple(np.round(i,5) for i in fit[0]), flush=True)\\nfor intercept in (False,True):\\n    A = X[:,:5] if intercept else z\\n    for rank in [1,2,3,5]:\\n        err=[]; end=[]; horizon=[]\\n        for a,b in splits:\\n            Q,R=np.linalg.qr(A[a]); u,sv,v=np.linalg.svd(Q.T@T[a],full_matrices=False)\\n            pred=A[b]@np.linalg.solve(R,(u[:,:rank]*sv[:rank])@v[:rank]); e=abs(pred-T[b]); err.append(e.mean());end.append(e[:,-1].mean());horizon.append(e.mean(axis=0).max())\\n        print('traj',intercept,rank,'MAE canonical / random worst / stress worst / worst final / worst horizon',*[round(i,6) for i in (err[0],max(err[1:13]),max(err[13:]),max(end),max(horizon))])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separate additive saturation -> H2 saturate a shared linear-plus-cross score; the shared square-root model reached 0.00448 worst MAE over six splits, and the direct trajectory model reached 0.00419 on the canonical split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The scalar cross interaction can be placed only outside the saturation without losing predictive accuracy.\",\n    \"empirical_witness\": \"Moving the cross term inside tanh lowered worst MAE from 0.02958 to 0.00458 on the same six splits.\",\n    \"causal_blanket_diagnosis\": \"The scalar residual is explained by coupling the cross interaction to the saturation; no corresponding nonlinear term has been established for the trajectory.\",\n    \"sublated_pivot\": \"Compare shared and partially shared saturating scores on independent randomized and coordinate-tail holdouts.\",\n    \"risk_kind\": \"missing_cross_inside_saturation\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Choose the lowest canonical-split scalar error immediately\",\n      \"rejected_reason\": \"The candidates are near the observed noise floor, and their previous high-magnitude holdout errors differ more than their canonical errors.\"\n    }\n  ],\n  \"rationale\": \"Fresh random and coordinate-tail holdouts test whether the shared-score model remains accurate outside the splits used to discover it. If it degrades, prefer the better-supported coupled variant. Per-horizon and terminal trajectory errors determine whether rank reduction improves the trajectory without hiding a weak endpoint.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "9dfce507a85701d975da16747bf53c9a3e97ac96c258a7dcf6744923fbc2bb1a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43278.5,
+      "usage_known": true,
+      "prompt_tokens": 34393,
+      "cached_tokens": 9344,
+      "completion_tokens": 1643
+    }
+  ]
+}

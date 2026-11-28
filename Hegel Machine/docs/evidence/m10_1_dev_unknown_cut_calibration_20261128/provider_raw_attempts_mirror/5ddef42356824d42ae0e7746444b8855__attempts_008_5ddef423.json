@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5ddef42356824d42ae0e7746444b8855",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Flat_MonolithicArchive_Online__dev_m101_c03_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:13:20.315128+00:00",
+  "ended_at_utc": "2026-11-28T08:13:39.945845+00:00",
+  "request_sha256": "6d70d6538419ba1e6caf91a044603b1d822e0296f1fdd135d423c3706bef693e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54453,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31885,
+    "cached_tokens": 9344,
+    "completion_tokens": 708
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _decode\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    s=pickle.load(f)[0]['study']\\np=s['panel_a']; u,v=p['u'],p['v']; errors=[]; affine=[]\\nfor h in np.array_split(np.random.default_rng(751).permutation(len(u)),6):\\n    k=np.setdiff1d(np.arange(len(u)),h)\\n    panel={name:p[name][k] for name in ('u','v')}\\n    errors.extend(np.linalg.norm(_decode(panel,v[h])-u[h],axis=1))\\n    # Compare on the same clean held-out rows, granting the affine comparator clean fit rows as well.\\n    clean=k[~np.isin(k,[5,17,31])]; h=h[~np.isin(h,[5,17,31])]\\n    c=np.linalg.lstsq(np.c_[np.ones(len(clean)),u[clean]],v[clean],rcond=None)[0]\\n    affine.extend(np.linalg.norm(np.linalg.solve(c[1:].T,(v[h]-c[0]).T).T-u[h],axis=1))\\nclean=~np.isin(np.random.default_rng(751).permutation(len(u)),[5,17,31]); e=np.array(errors)[clean]\\nprint('held-out clean calibration rows:',len(e),'cyclic inverse median/max L2:',np.median(e),e.max(),'affine inverse median L2:',np.median(affine))\\nassert e.max()<0.002 and np.median(e)<0.02*np.median(affine)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine calibration → cyclic cubic inverse with coupled two-rate trajectories; worst of 12 prediction slices: endpoint MAE 0.008629, trajectory MAE 0.011108.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public schema and prediction slices already pass. Holding out panel A rows tests the remaining failure mode directly: the nonlinear inverse might only work on the calibration rows that fitted it. If that occurs, revisit calibration fitting before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "e404f5704afb4dc49f4490c8e66350237b3ba108668199871d2293e2039e49dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22109.03,
+      "usage_known": true,
+      "prompt_tokens": 31885,
+      "cached_tokens": 9344,
+      "completion_tokens": 708
+    }
+  ]
+}

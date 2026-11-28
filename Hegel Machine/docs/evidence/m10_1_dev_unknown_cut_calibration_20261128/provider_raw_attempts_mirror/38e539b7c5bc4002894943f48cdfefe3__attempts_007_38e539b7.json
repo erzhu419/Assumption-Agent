@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "38e539b7c5bc4002894943f48cdfefe3",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Flat_MonolithicArchive_Online__dev_m101_c03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:00:35.300085+00:00",
+  "ended_at_utc": "2026-11-28T08:01:16.576835+00:00",
+  "request_sha256": "054cb2f623a488f180dd9448288d0c76362bc40eacc509e0c6d9213226129510",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40527,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26941,
+    "cached_tokens": 9344,
+    "completion_tokens": 1685
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Predict the endpoint and two-mode trajectory from calibrated panel operators.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(design, target):\\n    return np.linalg.lstsq(design, target, rcond=None)[0]\\n\\n\\ndef _calibrate(panel):\\n    u, v = panel['u'], panel['v']\\n    i, j = np.triu_indices(len(u), 1)\\n    coef = []\\n    for x, y in zip(u.T, v.T):\\n        dx = x[i] - x[j]\\n        ok = dx != 0\\n        slope = np.median((y[i] - y[j])[ok] / dx[ok])\\n        offset = np.median(y - slope * x)\\n        error = np.abs(y - offset - slope * x)\\n        keep = error <= 6 * np.median(error) + 1e-8\\n        coef.append(_fit(_affine(x[keep]), y[keep]))\\n    return np.asarray(coef).T\\n\\n\\ndef _cross_basis(z):\\n    return _affine(z[:, [0, 0, 1, 2]] * z[:, [1, 3, 2, 3]])\\n\\n\\ndef _even_basis(z, p):\\n    return _affine(z + p[0] * (np.sqrt(1 + p[1] * z**2) - 1))\\n\\n\\ndef _design(study, inputs):\\n    offset, gain = _calibrate(study['panel_a'])\\n    z = (inputs - offset) / gain\\n    panel = study['panel_c']\\n    u, v1, v2 = panel['u'], panel['v1'], panel['v2']\\n    a = _cross_basis(z) @ _fit(_cross_basis(u), v1)\\n\\n    def residual(p):\\n        f = _even_basis(u, p)\\n        return (f @ _fit(f, v2) - v2).ravel()\\n\\n    p = least_squares(residual, [1.0, 1.0], bounds=([0, 0.01], [10, 10])).x\\n    b = _even_basis(z, p) @ _fit(_even_basis(u, p), v2)\\n    return np.column_stack((_affine(z), a, b, a[:, 0] * b[:, 1], np.sum(a * b, axis=1)))\\n\\n\\ndef _time_basis(times, rates):\\n    return -np.expm1(-times[:, None] * rates)\\n\\n\\ndef _kinetics(x, obs, times):\\n    sampled = x @ _fit(x, obs)\\n\\n    def residual(rates):\\n        basis = _time_basis(times, rates)\\n        return (_fit(basis, sampled.T).T @ basis.T - sampled).ravel()\\n\\n    rates = least_squares(residual, [0.4, 1.8], bounds=([0.05, 1.0], [1.0, 4.0])).x\\n    basis = _time_basis(times, rates)\\n    return basis, _fit(basis, obs.T).T\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    design = _design(study, np.vstack((train['x'], study['test']['x'])))\\n    x, xt = design[:n], design[n:]\\n    basis, amplitudes = _kinetics(x, train['traj'], np.asarray(study['eval_times']))\\n    state = xt @ _fit(x, amplitudes) @ basis.T\\n    y = xt @ _fit(x, train['y'])\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([\\n        y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()\\n    ])}\\nPY\\ncat >/tmp/inspect_solver.py <<'PY'\\nimport pickle,sys,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; t=s['eval_times']; X=m._design(s,tr['x'])\\nnp.set_printoptions(precision=5,suppress=True,linewidth=130)\\nK,A=m._kinetics(X,tr['traj'],t)\\nU=np.c_[A,tr['y']]; c=m._fit(X,U); err=X@c-U\\nse=(np.linalg.pinv(X.T@X).diagonal()[:,None]*np.mean(err**2,0))**.5\\nprint('feature coefficients [slow, fast, y]:\\\\n',c); print('standard errors:\\\\n',se); print('coeff ratios to SE:\\\\n',c/se); print('in-sample amplitude and y RMS',np.mean(err**2,0)**.5)\\nidx=np.arange(len(X)); splits=[idx[56:]]+list(np.array_split(np.random.default_rng(14).permutation(len(X)),4));\\nfor J in splits:\\n I=np.setdiff1d(idx,J); st=dict(s,train={**tr,**{k:tr[k][I] for k in ['x','y','traj']}},test={'x':tr['x'][J]}); o=m.solve_batch(st); e=np.abs(o['y_hat']-tr['y'][J]); q=np.abs(o['state_pred']-tr['traj'][J]);print('MAEs',e.mean(),q.mean(),'per time',q.mean(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/inspect_solver.py && python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (quartic approximation to the second branch) -> H2 (compact square-root activation with dot and cross interactions); the previous model's worst four-fold y/trajectory MAE was 0.0078/0.0042.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the quartic activation\",\n      \"rejected_reason\": \"The square-root form reduces panel RMS from 0.000487 to 0.000117 without polynomial growth outside the calibration range.\"\n    }\n  ],\n  \"rationale\": \"Write the self-contained solver, check whether the compact activation preserves the held-out gains for both outputs, and inspect mode-specific coefficients to see whether a smaller readout is justified.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "4cd7718180d27564b581e7aeda8d6b3a4d4f98842dd5564d26711ff576702a6a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43736.97,
+      "usage_known": true,
+      "prompt_tokens": 26941,
+      "cached_tokens": 9344,
+      "completion_tokens": 1685
+    }
+  ]
+}

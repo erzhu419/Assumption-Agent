@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "860d046d501d435a913b8fc80b405e73",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__stageS__dev_m101_c01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:53:28.611326+00:00",
+  "ended_at_utc": "2026-11-28T07:54:07.119213+00:00",
+  "request_sha256": "0bc743262321547f9c1da5d7ae6c8b8daacd87e814fe196c5546959fd1a8ca4a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46953,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31832,
+    "cached_tokens": 10880,
+    "completion_tokens": 1696
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/model_cv.py <<'PY'\\nimport pickle\\nimport numpy as np\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\nfrom itertools import combinations_with_replacement as cr\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; t=s['eval_times']; Y=np.c_[y,z]\\nE=np.c_[-np.expm1(-1.52*t),-np.expm1(-.22*t)]; P=E@np.linalg.pinv(E)\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef terms(x,k):return np.column_stack([np.prod(x[:,q],axis=1) for q in cr(range(4),k)])\\nF=np.c_[aff(x),terms(x,2)];G=np.c_[F,terms(x,3)];D=x@x.T/4;R=cdist(x,x,'sqeuclidean');I=np.eye(len(x));\\nb=np.linalg.lstsq(G,Y,rcond=None)[0];p=s['panel_b'];bw=np.linalg.lstsq(aff(p['u']),p['v'],rcond=None)[0]; print('B directions',bw[1:].T.round(3),'orthogonal', (bw[1:].T@bw[1:]).round(3));\\nfor i in [0,1,8]:\\n H=np.zeros((4,4))\\n for (j,k),v in zip(cr(range(4),2),b[5:15,i]):H[j,k]=H[k,j]=v*(1 if j==k else .5)\\n print('quadratic',i,np.round(np.linalg.eigvalsh(H),4),'B basis',np.round(bw[1:].T@H@bw[1:],4));print('linear in B basis',np.round(bw[1:].T@b[1:5,i],4))\\nsplits=list(np.array_split(np.arange(len(x)),6))+[np.argsort(np.linalg.norm(x,axis=1))[-12:]]\\ndef evaluate(pred):\\n errs=[]\\n for j in splits:\\n  i=np.setdiff1d(np.arange(len(x)),j);r=abs(pred(i,j)-Y[j]);errs.append([r[:,0].mean(),r[:,1:].mean(),r[:,-1].mean(),max(r[:,1:].mean(0))])\\n return np.array(errs)\\ndef output(name,pred,rows):\\n e=evaluate(pred);rows.append((name,e[:6].mean(0),e.max(0),e[-1]));\\ndef project(a):\\n a[:,1:]=a[:,1:]@P;return a\\nrows=[]\\nfor d in (2,3,4,5):\\n A=np.c_[F,*[terms(x,k) for k in range(3,d+1)]];g=A@A.T\\n for l in (1e-6,.001,.01,.1):output(('mono',d,l),lambda i,j:project(g[np.ix_(j,i)]@solve(g[np.ix_(i,i)]+l*np.eye(len(i)),Y[i],assume_a='pos')),rows)\\nfor d in (3,4,5,6,8):\\n for amp in (.1,.5,1.):\\n  g=(1+amp*D)**d\\n  for l in (1e-6,1e-4,.001):output(('poly',d,amp,l),lambda i,j:project(g[np.ix_(j,i)]@solve(g[np.ix_(i,i)]+l*np.eye(len(i)),Y[i],assume_a='pos')),rows)\\nfor length in (0.65,1.,1.4,2.,3.,4.):\\n for l in (1e-5,.0001,.001,.01):\\n  for family in ('rbf','m52'):\\n   q=np.sqrt(5*R)/length;g=np.exp(-R/(2*length**2)) if family=='rbf' else (1+q+q*q/3)*np.exp(-q);g=g+F@F.T\\n   output((family,length,l),lambda i,j:project(g[np.ix_(j,i)]@solve(g[np.ix_(i,i)]+l*np.eye(len(i)),Y[i],assume_a='pos')),rows)\\n# Rational polynomial models: regression of numerator against y times denominator.\\nfor d in (2,3):\\n A=F if d==2 else G\\n for Q in (x,terms(x,2),np.c_[x,terms(x,2)],np.sum(x*x,axis=1,keepdims=True)):\\n  for lr in (.001,.03,.15):\\n   def pred(i,j):\\n    out=[]\\n    for q in Y.T:\\n     mat=np.c_[A[i],-Q[i]*q[i,None]];pen=np.r_[np.repeat(.0001,A.shape[1]),np.repeat(lr,Q.shape[1])]; w=solve(mat.T@mat+np.diag(pen),mat.T@q[i],assume_a='pos');den=1+Q[j]@w[A.shape[1]:];out.append((A[j]@w[:A.shape[1]])/np.maximum(.45,den))\\n    return project(np.array(out).T)\\n   output(('rat',d,Q.shape[1],lr),pred,rows)\\nfor j in [0,1,2,3]:\\n print('BEST',j)\\n for name,a,b,c in sorted(rows,key=lambda r:r[1][j]+.7*r[2][j])[:9]:print(name,a.round(5),b.round(5),c.round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/model_cv.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unregularized cubic → H2 rational or regularized nonlinear response with shared temporal modes; cubic tail MAE is 0.01394 for y and 0.01911 at the final horizon.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use free ridge directions for all latent amplitudes\",\"rejected_reason\":\"The opposing holdouts show split-dependent gains, and the fitted directions have not established a stable common mechanism.\"}],\"rationale\":\"Check whether the panel B basis simplifies the response coefficients, and screen regularized and rational models across contiguous blocks and a high-radius slice. Select scalar and trajectory models separately if their error patterns differ.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "23ec75ddc7a228a1b7de0528189a08e72b43453491a4caf4827158910c7040e3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43425.4,
+      "usage_known": true,
+      "prompt_tokens": 31832,
+      "cached_tokens": 10880,
+      "completion_tokens": 1696
+    }
+  ]
+}

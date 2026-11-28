@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "77b714034ca5469f8c7714c2be2b78a1",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__stageS__dev_m101_c02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:52:56.001210+00:00",
+  "ended_at_utc": "2026-11-28T07:53:25.364365+00:00",
+  "request_sha256": "9a8b11b229c37505b5d12e399a35036d73358acb927dcf38ecb124e0ea76cc1c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42975,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26894,
+    "cached_tokens": 10880,
+    "completion_tokens": 1144
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/m101_ablation.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\ntr=s['train']; x=m._coordinates(s,tr['x']); y=tr['y']; z=tr['traj']; t=s['eval_times']; ids=np.arange(len(x)); d=m._scalar_design(x)\\naff=lambda q:np.c_[np.ones(len(q)),q]\\ncontrols={'intercept+linear':aff(x),'tied':d,'difference':np.c_[x,x[:,0]*x[:,2]-x[:,1]*x[:,3]],'raw tied':np.c_[aff(tr['x']),tr['x'][:,0]*tr['x'][:,2]+tr['x'][:,1]*tr['x'][:,3]]}\\ndef joint(it,va):\\n    q=np.linalg.qr(x[it],mode='reduced')[0]; target=(q.T@z[it]).T\\n    def basis(r): return -np.expm1(-t[:,None]*r)\\n    def resid(r):\\n        b=basis(r); return (b@m._fit(b,target)-target).ravel()\\n    rates=least_squares(resid,[.4,1.8],bounds=([.01,.8],[.8,8.])).x\\n    b=basis(rates); return x[va]@m._fit(x[it],m._fit(b,z[it].T).T)@b.T\\nfamilies={'last16':[ids[56:]],'blocked':[ids[i:i+16] for i in range(0,len(ids),16)],'random':np.array_split(np.random.default_rng(7).permutation(ids),5),'radius':[np.argsort(np.linalg.norm(x,axis=1))[-16:]],'tails':[np.argsort(x[:,j])[sl] for j in range(4) for sl in (slice(0,12),slice(-12,None))]}\\nfor family,folds in families.items():\\n    errors=[]; coeff=[]; state=[]\\n    for va in folds:\\n        it=np.setdiff1d(ids,va)\\n        h=dict(s,train={k:tr[k][it] for k in ('x','y','traj')},test={'x':tr['x'][va]}); pred=m.solve_batch(h)\\n        np.testing.assert_allclose(pred['y_hat'],d[va]@m._fit(d[it],y[it]),rtol=1e-12,atol=1e-12)\\n        errors.append([np.mean(abs(y[va]-v[va]@m._fit(v[it],y[it]))) for v in controls.values()]); coeff.append(m._fit(d[it],y[it])[-1])\\n        state.append([np.mean(abs(z[va]-pred['state_pred']),axis=0),np.mean(abs(z[va]-joint(it,va)),axis=0)])\\n    print(family,list(controls),'scalar mean',np.mean(errors,axis=0),'worst',np.max(errors,axis=0),'interaction coefficient range',(min(coeff),max(coeff)))\\n    print(family,'state [shipped,joint] mean',np.mean(state,axis=(0,2)),'worst horizon',np.max(state,axis=(0,2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m101_ablation.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine scalar response → H2 calibrated tied-bilinear scalar and two shared relaxation modes; verified worst held-out MAE is 0.00563 for the scalar and 0.00711 at a trajectory timestamp.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Repeat the rational-denominator and schema audits\",\"rejected_reason\":\"Both already ran on the unchanged artifact. The pending scientific evidence calls for an explicit interaction ablation, not another schema check.\"}],\"rationale\":\"Compare the shipped scalar to an affine model and sign-swapped and raw-coordinate interactions on identical held-out rows. This tests whether the specific calibrated sum resolves the missing-interaction finding. Compare joint rate fitting on those same slices to see whether the trajectory fit can improve without adding parameters.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "5e2c7f18e60b48301000fadd937df2f75bf1a7ff732c5833ce6eb7488326ca98",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31737.62,
+      "usage_known": true,
+      "prompt_tokens": 26894,
+      "cached_tokens": 10880,
+      "completion_tokens": 1144
+    }
+  ]
+}

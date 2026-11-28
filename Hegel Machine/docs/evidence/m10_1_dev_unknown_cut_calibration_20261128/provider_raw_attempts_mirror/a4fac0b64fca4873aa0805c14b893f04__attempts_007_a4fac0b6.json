@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a4fac0b64fca4873aa0805c14b893f04",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Flat_MonolithicArchive_Online__dev_m101_c02_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:13:22.966299+00:00",
+  "ended_at_utc": "2026-11-28T08:13:53.833011+00:00",
+  "request_sha256": "b2756e118b68fa69ad91fc2dc9e02fdaf35be5914f7c63af6b6dd2a78f7d2cb2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50282,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29952,
+    "cached_tokens": 9344,
+    "completion_tokens": 1209
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('batch_solver', root + 'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open(root + 'public_batch.pkl', 'rb'))[0]['study']\\ntr = s['train']\\n\\ndef check(out, n):\\n    y, t, d = (out[k] for k in ('y_hat', 'state_pred', 'diagnostics_vec'))\\n    assert y.shape == (n,) and t.shape == (n, len(s['eval_times'])) and d.shape == (4,)\\n    assert all(np.isfinite(a).all() for a in (y, t, d))\\n    np.testing.assert_allclose(d, [y.mean(), y.std(), t[:, -1].mean(), t[:, -1].std()], rtol=0, atol=1e-14)\\n    return y, t\\n\\ncheck(m.solve_batch(s), len(s['test']['x']))\\nids = np.arange(len(tr['x']))\\nradius = np.argsort(np.linalg.norm(m._coordinates(s, tr['x']), axis=1))\\nfolds = [('56/16', ids[:56], ids[56:]), ('large radius', radius[:-12], radius[-12:])]\\nfolds += [(f'random {k}', np.setdiff1d(ids, j), j) for k,j in enumerate(np.array_split(np.random.default_rng(14).permutation(ids), 5))]\\na = s['panel_a']; keep = np.max(abs(a['v']-a['u']), axis=1)<3\\nu, v = a['u'][keep], a['v'][keep]\\ncal_errors = []\\nfor k in range(len(u)):\\n    i = np.arange(len(u)) != k\\n    affine = m._affine(u[k:k+1]) @ m._ls(m._affine(u[i]), v[i])\\n    cyclic = m._calibration_design(u[k:k+1]) @ m._ls(m._calibration_design(u[i]), v[i].ravel())\\n    cal_errors.append([affine.ravel()-v[k], cyclic-v[k]])\\nprint('Panel A LOO RMSE [affine, cyclic]:', np.sqrt(np.mean(np.square(cal_errors), axis=(0,2))))\\naffine_fit = m._ls(m._affine(u), v)\\nb = s['panel_b']; b_op = m._ls(m._affine(b['u']), b['v'])\\nz_aff = m._affine(np.linalg.solve(affine_fit[1:].T, (tr['x']-affine_fit[0]).T).T) @ b_op\\nrows = []\\nfor name, i, j in folds:\\n    fold = dict(s, train={k: tr[k][i] for k in ('x', 'y', 'traj')}, test={'x': tr['x'][j]})\\n    y, t = check(m.solve_batch(fold), len(j))\\n    ya = m._scalar_design(z_aff[j]) @ m._ls(m._scalar_design(z_aff[i]), tr['y'][i])\\n    ta = m._trajectory(z_aff[i], tr['traj'][i], z_aff[j], s['eval_times'])\\n    def metrics(y, t):\\n        e = np.abs(t-tr['traj'][j]); return [np.mean(np.abs(y-tr['y'][j])), e.mean(), e[:, -1].mean(), e.mean(axis=0).max()]\\n    row = metrics(y, t); rows.append(row)\\n    print(name, 'cyclic', np.round(row, 6), 'affine', np.round(metrics(ya, ta), 6))\\nprint('Worst cyclic MAE [scalar, trajectory, final, worst horizon]:', np.round(np.max(rows, axis=0), 6))\\nassert np.max(rows) < 0.01\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine calibration → H2: cyclic cubic inversion with a paired-product scalar readout and two exponential modes; worst measured MAEs are 0.004588 for the scalar, 0.004459 for the trajectory, and 0.005525 at the final horizon.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public schema already passed. Exercise the exact solver in an isolated process to catch interface or per-horizon regressions, and compare affine and cyclic calibration with the same readouts to isolate the source of the improvement. Revisit the candidate only if these checks expose a failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "9486fbe2de65ee45cd13c4dd646340459a8cb3c3cc4a66d4749972592b002fad",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33340.87,
+      "usage_known": true,
+      "prompt_tokens": 29952,
+      "cached_tokens": 9344,
+      "completion_tokens": 1209
+    }
+  ]
+}

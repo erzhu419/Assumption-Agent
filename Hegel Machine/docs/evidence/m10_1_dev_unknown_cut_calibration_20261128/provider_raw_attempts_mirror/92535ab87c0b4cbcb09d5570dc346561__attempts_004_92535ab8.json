@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "92535ab87c0b4cbcb09d5570dc346561",
+  "call_seq": 4,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:14:54.426131+00:00",
+  "ended_at_utc": "2026-11-28T08:15:28.122385+00:00",
+  "request_sha256": "75068bf6eac82ab1381eb4e066f94b9bd95d00ae57ac8ae26b23f1295d67f4ac",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 29579,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22201,
+    "cached_tokens": 9344,
+    "completion_tokens": 1470
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement as comb\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; z=tr['traj']; t=s['eval_times']\\ndef aff(u):return np.c_[np.ones(len(u)),u]\\ndef poly(u,d):return np.column_stack([np.prod(u[:,idx],axis=1) for j in range(d+1) for idx in comb(range(u.shape[1]),j)])\\ndef fit(f,v):return np.linalg.lstsq(f,v,rcond=None)[0]\\na=s['panel_a']; f=aff(a['u']); m=np.ones(len(f),bool)\\nfor _ in range(5):\\n A=fit(f[m],a['v'][m]); e=np.linalg.norm(a['v']-f@A,axis=1);m=e<3*np.median(e)\\nb=s['panel_b']; B=fit(aff(b['u']),b['v']); q=(x-A[0])@np.linalg.inv(A[1:]); r=aff(q)@B\\nu,sv,v=np.linalg.svd(z,full_matrices=False); vv=z@v[:2].T\\nif __name__=='__main__':\\n def wave(kind,p):\\n  if kind=='sin_pair':return np.c_[np.sin(p[0]*t),np.sin(p[1]*t)]\\n  if kind=='sin_slow':return np.c_[np.sin(p[0]*t),-np.expm1(-p[1]*t)]\\n  if kind=='sin_t':return np.c_[np.sin(p[0]*t),t]\\n  if kind=='sin_cos':return np.c_[np.sin(p[0]*t),1-np.cos(p[1]*t)]\\n  if kind=='damped_pair':return np.c_[np.exp(-p[2]*t)*np.sin(p[0]*t),np.exp(-p[3]*t)*np.sin(p[1]*t)]\\n  if kind=='sin_quad':return np.c_[np.sin(p[0]*t),t*t]\\n  if kind=='sin_tanh':return np.c_[np.sin(p[0]*t),np.tanh(p[1]*t)]\\n  if kind=='damped_slow':return np.c_[np.exp(-p[2]*t)*np.sin(p[0]*t),-np.expm1(-p[1]*t)]\\n for k in ('sin_pair','sin_slow','sin_t','sin_cos','damped_pair','sin_quad','sin_tanh','damped_slow'):\\n  p0=[1.5,.6,.15,.15][:4 if k=='damped_pair' else 3 if k=='damped_slow' else 2 if k not in ('sin_t','sin_quad') else 1];\\n  def er(p):\\n   f=wave(k,p);return (f@fit(f,z[:56].T)-z[:56].T).ravel()\\n  p=least_squares(er,p0,bounds=(0,8),max_nfev=200).x; f=wave(k,p); print(k,np.round(p,5),np.std(er(p)),np.std(f@fit(f,z[56:].T)-z[56:].T))\\n c=s['panel_c']; w=c['u'];\\n for tag in ('v1','v2'):\\n  print(tag,'affine,quadratic,additive dictionaries');tar=c[tag];\\n  for k,f in [('aff',aff(w)),('quad',poly(w,2)),('adden',np.c_[aff(w),w*w,w**3,np.sin(2*w),np.cos(2*w)]),('add23',np.c_[aff(w),w*w,w**3]),('sin',np.c_[aff(w),np.sin(2*w),np.cos(2*w)]),('tanh',np.c_[aff(w),np.tanh(1.4*w),np.tanh(w)**2])]:\\n   h=f@np.linalg.pinv(f); err=(tar-h@tar)/np.maximum(1-h.diagonal()[:,None],1e-9);print(k,np.round(np.sqrt(np.mean(err**2,0)),5))\\n for tag,w in [('raw',x),('cal',q),('rot',r),('rot_raw',aff(x)@B),('rev', (q-B[0])@np.linalg.inv(B[1:]))]:\\n  f=poly(w,2); res=np.c_[y,vv]-f@fit(f,np.c_[y,vv]); print(tag,'corr nonlinear residuals');\\n  dic=np.c_[w**3,w**4,np.sin(2*w),np.cos(2*w),np.tanh(w),np.tanh(w)**2,*[(w[:,i]*w[:,j])[:,None] for i,j in comb(range(4),2) if i!=j]];dic-=f@fit(f,dic); corr=dic.T@res/(np.maximum(np.linalg.norm(dic,axis=0),1e-14)[:,None]*np.linalg.norm(res,axis=0)); print(np.round(corr[:24],2))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 robust affine calibration → H2 rank-two temporal dynamics with nonlinear amplitudes; the archived 56/16 MAEs are 0.075617 for trajectories and 0.040263 for scalars.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit an unrestricted quartic\",\"rejected_reason\":\"It interpolates the 56 training rows but raises holdout error for all three channels.\"}],\"rationale\":\"Compare temporal laws on unused rows and look for structured nonlinear residuals in calibrated coordinates before fitting a larger model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "6cab70b16b2b2b5cb0bb5666760052cf81339b2f80531df7e81783b3bdb9386b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38732.68,
+      "usage_known": true,
+      "prompt_tokens": 22201,
+      "cached_tokens": 9344,
+      "completion_tokens": 1470
+    }
+  ]
+}

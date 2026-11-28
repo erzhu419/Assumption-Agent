@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "42296add06c84e0686a5a60499b85f3a",
+  "call_seq": 3,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c01_batch_04__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:07:37.203890+00:00",
+  "ended_at_utc": "2026-11-28T08:08:03.780381+00:00",
+  "request_sha256": "a132ca87fca1ba0696401d4e0b5f3bbddfcdd02fbaf786b7c537e8c7291e91e8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21551,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18866,
+    "cached_tokens": 9344,
+    "completion_tokens": 993
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat /tmp/hegel_continual_archive/dev_m101_c01_batch_02_solver.py; cat > /tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; t=s['eval_times']; np.set_printoptions(precision=5,suppress=True)\\nprint('t,tel',t,s['telemetry_vec'])\\na=s['panel_a']; A=np.c_[np.ones(len(a['u'])),a['u']]; keep=np.ones(len(A),bool)\\nfor _ in range(4):\\n b=np.linalg.lstsq(A[keep],a['v'][keep],rcond=None)[0]; r=np.linalg.norm(A@b-a['v'],axis=1); keep=r<4*np.median(r)\\nprint('calibration',b, 'inliers',sum(keep), 'errors',np.sort(r)[-10:]);\\nfor k in [1,2,3]:\\n F=PolynomialFeatures(k).fit_transform(a['u']); print('panel_a poly',k,np.sqrt(np.mean((F[keep]@np.linalg.lstsq(F[keep],a['v'][keep],rcond=None)[0]-a['v'][keep])**2)))\\nxc=b[0]+x@b[1:];\\nfor mode in ('exp','exp+constant','exp+linear','biexp'):\\n def basis(p):\\n  g=-np.expm1(-t[:,None]*p)\\n  return {'exp':g,'exp+constant':np.c_[g,np.ones(len(t))],'exp+linear':np.c_[g,t],'biexp':g}[mode]\\n def fun(p):\\n  B=basis(p); return (z.T-B@np.linalg.lstsq(B,z.T,rcond=None)[0]).ravel()\\n fit=least_squares(fun,[1.] if mode!='biexp' else [1.,.3],bounds=(.001,10)); print(mode,fit.x,np.sqrt(np.mean(fit.fun**2)))\\n if mode=='exp':\\n  B=basis(fit.x); amp=(np.linalg.lstsq(B,z.T,rcond=None)[0])[0]; print('temporal residual sv',np.linalg.svd(fun(fit.x).reshape(8,-1),compute_uv=False));\\nfor W in [x,xc,np.c_[xc,amp]]:\\n for k in [1,2,3]:\\n  F=PolynomialFeatures(k).fit_transform(W); P=F@np.linalg.lstsq(F[:56],np.c_[y,amp][:56],rcond=None)[0]; print('poly',W.shape[1],k,'cv',np.mean(abs(P[56:]-np.c_[y,amp][56:]),axis=0),'fit',np.std(P[:56]-np.c_[y,amp][:56],axis=0));\\nprint('linear in xc',np.linalg.lstsq(np.c_[np.ones(len(x)),xc],np.c_[y,amp],rcond=None)[0]); print('ranges',np.min(xc,axis=0),np.max(xc,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Rank-one trajectory structure → separate the temporal law from the spatial amplitude; archived 56/16 MAEs are 0.043282 for y and 0.008709 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The calibration residuals will distinguish sparse contamination from a nonlinear map. Comparing temporal residuals and held-out polynomial errors will show whether to focus next on the time law or the spatial readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "75a13d4949ecff4ecdf791f4c58288d72069a0017bb1fcdc2f5dc018959f5be3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28960.86,
+      "usage_known": true,
+      "prompt_tokens": 18866,
+      "cached_tokens": 9344,
+      "completion_tokens": 993
+    }
+  ]
+}

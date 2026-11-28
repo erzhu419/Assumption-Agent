@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d85f4d06b03543eebfc1fb095e9ca833",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Fixed_TwoStage_Modular_Online__dev_m101_c03_batch_05__dag_edit_merge_nodes__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_05__blind_campaign__merge_nodes",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:19:34.121570+00:00",
+  "ended_at_utc": "2026-11-28T08:19:55.632660+00:00",
+  "request_sha256": "2cda6be22200e24af2b7c8a4fe9f92c9218c9d3e7a8c6d554227ec3b178a869a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 60485,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34508,
+    "cached_tokens": 9344,
+    "completion_tokens": 762
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nsed -n '33,62p' /holdout_task/test_dag_candidate.py\\nsed -i \\\"s/study = inputs\\\\['__input__'\\\\]/study = inputs.get('__input__', inputs)/\\\" /holdout_task/node_00.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'node_00.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['x']); rows=np.arange(n)\\nz=m._invert(tr['x'],m._calibrate(s['panel_a']))\\nfolds={f'random_{k}':j for k,j in enumerate(np.array_split(np.random.default_rng(72).permutation(n),5))}\\nfolds['outer_radius']=np.argsort(np.linalg.norm(z,axis=1))[-12:]\\nfor name,j in folds.items():\\n i=np.setdiff1d(rows,j); st={**s,'train':{k:tr[k][i] for k in ('x','y','traj')},'test':{'x':tr['x'][j]}}\\n o=m.run_node({'__input__':st}); ey=np.abs(o['y_hat']-tr['y'][j]); et=np.abs(o['state_pred']-tr['traj'][j]); last=o['state_pred'][:,-1]\\n np.testing.assert_allclose(o['diagnostics_vec'],[o['y_hat'].mean(),o['y_hat'].std(),last.mean(),last.std()]); print(name, f'y_mae={ey.mean():.6f}, traj_mae={et.mean():.6f}, worst_horizon_mae={et.mean(axis=0).max():.6f}')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 additive readouts -> H2 calibrated cross-products; earlier basis tests reached worst-fold MAEs of 0.0060 for y and 0.0077 for trajectory, but the target artifact has not yet scored because of an input handoff mismatch.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\",\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Replace the wrapped-input contract with a direct-only contract\",\"rejected_reason\":\"The evaluator passes the study directly, but the published node interface also requires accepting it under __input__.\"}],\"rationale\":\"Fix the handoff without changing the model. Run the official evaluator in isolation, then test the published wrapper and measure per-horizon error on random folds and the outer-radius slice. If radius or horizon errors exceed tolerance, investigate extrapolation or the rank-two temporal basis before submitting.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c58063c9d1c1eb7cc7cce7089ee33031acf4c50f33a4703e9642eba46e97cafc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23983.66,
+      "usage_known": true,
+      "prompt_tokens": 34508,
+      "cached_tokens": 9344,
+      "completion_tokens": 762
+    }
+  ]
+}

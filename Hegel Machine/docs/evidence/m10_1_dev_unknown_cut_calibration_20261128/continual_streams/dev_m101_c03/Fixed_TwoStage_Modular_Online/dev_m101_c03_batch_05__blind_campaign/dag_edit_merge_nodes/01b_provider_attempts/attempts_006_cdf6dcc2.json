@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cdf6dcc287384a3fb51aef9092befd6c",
+  "call_seq": 6,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Fixed_TwoStage_Modular_Online__dev_m101_c03_batch_05__dag_edit_merge_nodes__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_05__blind_campaign__merge_nodes",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:17:38.618280+00:00",
+  "ended_at_utc": "2026-11-28T08:18:11.574078+00:00",
+  "request_sha256": "e5927f1e442d1edf88b32da9e133c3674ecdd6d44e2a4b39c4b99b632726d25b",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 40739,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27608,
+    "cached_tokens": 9344,
+    "completion_tokens": 1317
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/x=s\\\\[.train.\\\\]/,$d' /tmp/compose.py >/tmp/cal.py\\nsed -i 's/return x+np.logaddexp(1.1\\\\*x,-1.1\\\\*x)-np.log(2)/return x+(np.logaddexp(1.1*x,-1.1*x)-np.log(2))\\\\/1.1/' /tmp/cal.py\\ncat >/tmp/readout.py <<'PY'\\nfrom cal import *\\nfrom panels import poly\\nfrom scipy.optimize import least_squares\\nx=s['train']['x']; z=invert(x); b=forward(z); bi=backward(z)\\nY=np.c_[s['train']['y'],s['train']['traj']]; t=s['eval_times']; n=len(x); print('N',n)\\nidx=n-20; rng=np.random.default_rng(17)\\nfolds=[(np.arange(idx),np.arange(idx,n))]+[(np.setdiff1d(np.arange(n),j),j) for j in np.array_split(rng.permutation(n),5)]\\ndef scores(m,alpha=0):\\n E=[]\\n for i,j in folds:\\n  S=np.linalg.norm(m[i],axis=0); S=np.maximum(S,1e-10); a=m[i]/S\\n  w=np.linalg.lstsq(a,Y[i],rcond=1e-9)[0] if not alpha else np.linalg.solve(a.T@a+alpha*np.eye(a.shape[1]),a.T@Y[i]); e=abs((m[j]/S)@w-Y[j]); E.append((e[:,0].mean(),e[:,1:].mean()))\\n return np.round([*E[0],*np.max(E,axis=0)],5)\\nfor k,a in {'x':x,'z':z,'b':b,'bi':bi}.items():\\n for deg in (2,3,4,5):\\n  m,names=poly(a,deg); fit=m@np.linalg.lstsq(m,Y,rcond=None)[0]; print(k,deg,'train',np.mean(abs(fit-Y),axis=0)[[0,-1]].round(5),'CV',[(l,scores(m,l)) for l in (0,1e-5,1e-3)])\\n m,names=poly(a,4); print(k,'Y cubic coeffs > .015',[(j,round(c,4)) for j,c in zip(names,np.linalg.lstsq(m,Y,rcond=None)[0][:,0]) if abs(c)>.015])\\n for form,f in {'z-squares':np.c_[a,a*a,q(a)],'panel-readouts':np.c_[a,q(a),h(a)],'C1C2-mixed':np.c_[a,q(a),h(a),q(a)*h(a),q(a)*a,q(a)*np.roll(a,-1,axis=1),q(a)**2],'C1C2-product':np.c_[a,q(a),h(a),(lin(q(a))@C)*(lin(h(a))@D)]}.items(): print(k,form,scores(lin(f),1e-6))\\n# Estimate temporal basis before fitting the spatial amplitudes.\\nfor name,f in {'exp+t':lambda k:np.c_[1-np.exp(-k*t),t], 'exp+integral':lambda k: np.c_[1-np.exp(-k*t),t-(1-np.exp(-k*t))/k], 'exp+decay':lambda k:np.c_[1-np.exp(-k*t),np.exp(-k*t)],'exp+texp':lambda k:np.c_[1-np.exp(-k*t),t*np.exp(-k*t)]}.items():\\n def resid(p):\\n  m=f(np.exp(p[0])); return (Y[:,1:]-np.linalg.lstsq(m,Y[:,1:].T,rcond=None)[0].T@m.T).ravel()\\n r=least_squares(resid,[0.]); print('time',name,np.exp(r.x),np.mean(abs(r.fun)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 additive panel features -> H2 interaction terms in calibrated coordinates and a separate temporal basis; the best additive model's larger public-split MAE was 0.0789.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An additive linear readout of the tested panel-feature placements suffices.\",\"empirical_witness\":\"The best tested additive composition had public-split MAEs of 0.0789 for y and 0.0642 for trajectory, both above 0.035, despite numerical inversion residuals below 4e-12.\",\"causal_blanket_diagnosis\":\"The calibrated features can be reconstructed accurately, but their additive span does not capture the observed outcomes.\",\"sublated_pivot\":\"Correct the C2 normalization and test interactions and polynomial orders in the recovered coordinates, separating spatial prediction from the time basis.\",\"risk_kind\":\"incomplete readout basis\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Tune the inversion solver\",\"rejected_reason\":\"Its observed residual is already negligible relative to the readout errors.\"}],\"rationale\":\"Compare the raw and calibrated bases across folds to decide where to impose sparsity. The temporal fit tests whether the trajectory can be predicted through a small number of amplitudes rather than eight unrelated regressions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "96fbf440060503fc9a7918e966f484e9677e6c105bedff5907f5a1373c49100f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35515.41,
+      "usage_known": true,
+      "prompt_tokens": 27608,
+      "cached_tokens": 9344,
+      "completion_tokens": 1317
+    }
+  ]
+}

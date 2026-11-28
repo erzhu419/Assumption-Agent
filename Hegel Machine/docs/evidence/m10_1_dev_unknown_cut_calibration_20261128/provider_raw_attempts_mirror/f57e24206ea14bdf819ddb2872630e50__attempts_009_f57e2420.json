@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f57e24206ea14bdf819ddb2872630e50",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c04_batch_06__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_06__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:18:56.553915+00:00",
+  "ended_at_utc": "2026-11-28T08:19:36.443454+00:00",
+  "request_sha256": "e54731023f7a93996403456df8349f952081e1caef0cd7002dba240a2ba716df",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 61048,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35865,
+    "cached_tokens": 0,
+    "completion_tokens": 1543
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/node_01.py <<'PY'\\nimport numpy as np\\nfrom itertools import combinations_with_replacement\\n\\n\\ndef _poly(x, low, high):\\n    return np.column_stack([np.prod(x[:, j], axis=1) for d in range(low, high + 1)\\n                            for j in combinations_with_replacement(range(x.shape[1]), d)])\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    source = inputs['__input__']['train']\\n    up, mixed = inputs['node_02'], inputs['node_00']\\n    u = np.concatenate((up['u_tr'], up['u_te']))\\n    z = np.concatenate((mixed['z_tr'], mixed['z_te']))\\n    n = len(up['u_tr'])\\n    q = _poly(u, 0, 2)\\n    state = q[n:] @ np.linalg.lstsq(q[:n], source['traj'], rcond=None)[0]\\n    # A symmetric polynomial kernel uses both coordinate systems without duplicating\\n    # unpenalized quadratic terms, which span the same space under affine mixing.\\n    scale = np.sqrt(np.mean(u[:n] ** 2))\\n    h = np.column_stack([0.7 ** (d - 2) * _poly((x - x[:n].mean(0))/scale, d, d)\\n                         for x in (u, z) for d in (3, 4)]) / np.sqrt(2)\\n    fit = np.linalg.lstsq(q[:n], np.column_stack((source['y'], h[:n])), rcond=None)[0]\\n    r = source['y'] - q[:n] @ fit[:, 0]\\n    h -= q @ fit[:, 1:]\\n    w = np.linalg.solve(h[:n] @ h[:n].T + 0.3*np.eye(n), r)\\n    y = q[n:] @ fit[:, 0] + h[n:] @ (h[:n].T @ w)\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([\\n        y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\ncat >/tmp/ridge_readout.py <<'PY'\\nfrom dag_probe import *\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import qr\\nfrom itertools import product\\nrng=np.random.default_rng(442); X=np.c_[u,z]; Q=basis(u,2); N=52\\nfolds=[(np.setdiff1d(np.arange(72),v),v) for v in [np.arange(52,72),np.arange(0,20),np.arange(20,40),np.arange(40,60)]]\\nfs={'sin':np.sin,'tanh':np.tanh,'rat':lambda a:a/(1+a*a),'gaussian':lambda a:np.exp(-a*a),'cos':np.cos}\\nfor mode in ['linear','bilinear','rank1','quadratic']:\\n for fn,f in fs.items():\\n  for count in [1,2]:\\n   err=[]; tr=[]; fits=[]\\n   for t,v in folds:\\n    A,B=Q[t],Q[v]; U=np.linalg.qr(A)[0]; r=Y[t]-U@(U.T@Y[t]);\\n    if mode=='linear': Z=np.c_[np.ones(len(u)),u]; k=5\\n    elif mode=='bilinear': Z=np.c_[np.ones(len(u)),u*z]; k=5\\n    elif mode=='rank1': Z=basis(u,1); k=10\\n    else: Z=Q; k=15\\n    def features(p,rows):\\n     p=p.reshape(k,count); a=Z[rows]@p[:Z.shape[1]]\\n     if mode=='rank1': a*=Z[rows]@p[5:]\\n     return f(a)\\n    def calc(p):\\n     H=features(p,t); H-=U@(U.T@H); w=np.linalg.lstsq(H,r,rcond=1e-7)[0]; return H@w-r,w\\n    best=None\\n    for rep in range(16 if count==1 else 8):\\n     p0=rng.normal(0,.8,(k,count));\\n     opt=least_squares(lambda p:calc(p)[0],p0.ravel(),max_nfev=130,ftol=1e-6)\\n     e,w=calc(opt.x)\\n     if best is None or np.linalg.norm(e)<best[0]: best=(np.linalg.norm(e),opt.x,w,np.mean(abs(e)))\\n    e,p,w,mae=best; coef=np.linalg.lstsq(A,Y[t]-features(p,t)@w,rcond=None)[0]; err.append(np.mean(abs(B@coef+features(p,v)@w-Y[v]))); tr.append(mae); fits.append((p,w))\\n   print(mode,fn,count,np.round(err,5),np.round(tr,5), 'params',np.round(fits[0][0],3),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ridge_readout.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 sparse fixed interaction dictionary → H2 smooth nonlinear interaction with a learned argument; best prior scalar MAE 0.0395, worst block 0.0418, and worst trajectory horizon 0.00761.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote a fixed sparse dictionary directly\",\"rejected_reason\":\"Its independently selected terms still miss the threshold; the dictionary may discretize the nonlinear argument too coarsely.\"}],\"rationale\":\"Save and test a regularized baseline now. Compare learned nonlinear arguments on four held-out blocks, using only training residuals to choose the parameters in each fold.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "4402008c2f61e53bbf588bbebcbe6ccc4dfd11add6dd11cf000e07a6154f628b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42407.97,
+      "usage_known": true,
+      "prompt_tokens": 35865,
+      "cached_tokens": 0,
+      "completion_tokens": 1543
+    }
+  ]
+}

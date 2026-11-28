@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4652a3a900644b1da6664dae7857db1e",
+  "call_seq": 4,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c02_batch_02__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_02__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:05:35.598417+00:00",
+  "ended_at_utc": "2026-11-28T08:06:18.391119+00:00",
+  "request_sha256": "23919b70aa2414e9c1383f54931b156c41fa80f49dc1eb45a09013b24c14af0c",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 27203,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20848,
+    "cached_tokens": 9344,
+    "completion_tokens": 1751
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/mixed_probe.py <<'PY'\\nimport numpy as np,pickle,runpy\\nfrom itertools import combinations_with_replacement\\np='/holdout_task/'\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; a=runpy.run_path(p+'_frozen_nodes/node_00.py')['run_node']({'__input__':s}); b=runpy.run_path(p+'_frozen_nodes/node_01.py')['run_node']({'node_00':a}); u,z=a['u_tr'],b['z_tr']; y=s['train']['y']; n=len(y); ids=np.arange(n)\\nx=np.c_[u,z]; nm=[f'{c}{i}' for c in 'uz' for i in range(4)]; L=np.c_[np.ones(n),u]; fs=[]; names=[]\\ndef add(name,v): names.append(name); fs.append(v)\\nfor d in (2,3,4):\\n for jj in combinations_with_replacement(range(8),d):\\n  if d==4 and len(set(jj))>2: continue\\n  add('*'.join(nm[j] for j in jj),np.prod(x[:,jj],axis=1))\\nfuncs={'sin':np.sin,'tanh':np.tanh,'rat':lambda q:q/(1+q*q),'atan':np.arctan,'soft':lambda q:q/(1+abs(q)),'cos':np.cos,'abs':abs}\\nfor i in range(8):\\n for k,f in funcs.items():\\n  for c in (0.5,1,2):\\n   F=f(c*x[:,i]); add(f'{k}({c}*{nm[i]})',F)\\n   for j in range(8): add(f'{nm[j]}*{k}({c}*{nm[i]})',x[:,j]*F)\\nfor i in range(4):\\n for j in range(4,8):\\n  q=x[:,i]*x[:,j]\\n  for k,f in funcs.items():\\n   for c in (0.5,1,2): add(f'{k}({c}*{nm[i]}*{nm[j]})',f(c*q))\\n  for c in (.25,.5,1,2):\\n   for v,w in ((i,j),(j,i)):\\n    add(f'{nm[v]}/(1+{c}*{nm[w]}^2)',x[:,v]/(1+c*x[:,w]**2)); add(f'{nm[v]}^2/(1+{c}*{nm[w]}^2)',x[:,v]**2/(1+c*x[:,w]**2))\\n  for sign in (-1,1):\\n   q=x[:,i]+sign*x[:,j]\\n   for k,f in funcs.items():\\n    for c in (.5,1,2): add(f'{k}({c}*({nm[i]}+{sign}*{nm[j]}))',f(c*q))\\nX=np.array(fs).T\\nsplits=np.split(np.random.default_rng(982).permutation(n),6)+[np.arange(52,72)]\\ndef greedy(tr,te,steps,base=L, verbose=False):\\n d=base.copy(); out=[]\\n for t in range(steps+1):\\n  q=np.linalg.qr(d[tr],mode='reduced')[0]; res=y[tr]-q@(q.T@y[tr]); beta=np.linalg.lstsq(d[tr],y[tr],rcond=None)[0]; F=X[tr]-q@(q.T@X[tr]); norms=np.linalg.norm(F,axis=0); sc=abs(F.T@res)/np.where(norms>1e-7,norms,np.inf); jj=np.argmax(sc)\\n  out.append(np.mean(abs(d[te]@beta-y[te])))\\n  if verbose: print(t, 'rmse',np.std(res), 'top', [(names[j],round(sc[j],4)) for j in np.argsort(sc)[-5:][::-1]])\\n  d=np.c_[d,X[:,jj]]\\n return out\\nQ=np.c_[L,np.column_stack([u[:,i]*u[:,j] for i,j in combinations_with_replacement(range(4),2)])]\\nfor base in (L,Q):\\n print('BASE',base.shape[1]); m=np.array([greedy(np.setdiff1d(ids,te),te,14,base) for te in splits]); print('mean/worst/last',np.round(np.stack([m[:-1].mean(0),m[:-1].max(0),m[-1]]),5)); greedy(ids,ids,8,base,True)\\nC=s['panel_c']; U,V=s['panel_b'].values(); B=np.linalg.lstsq(np.c_[np.ones(len(U)),U],V,rcond=None)[0]; c=C['u']; cz=np.c_[np.ones(len(c)),c]@B\\nfor k in ('v1','v2'):\\n print('Panel C',k,'affine residual',np.std(C[k]-np.c_[np.ones(len(c)),c]@np.linalg.lstsq(np.c_[np.ones(len(c)),c],C[k],rcond=None)[0],axis=0),'v1 proximity to c,cz',np.mean(abs(C[k]-c)),np.mean(abs(C[k]-cz)))\\nprint('telemetry',s['telemetry_vec']); print('train/test u ranges',u.min(0),u.max(0),a['u_te'].min(0),a['u_te'].max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/mixed_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Quadratic readout → structured nonlinear calibrated–mapped interactions; full cubic reaches 0.03977 worst random-fold scalar MAE and 0.03730 official-split scalar MAE, while affine trajectory MAE stays below 0.0048.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Adding bilinear calibrated–mapped products to an unrestricted quadratic basis supplies the missing readout terms.\",\n    \"empirical_witness\": \"The mapped coordinates are affine in the calibrated coordinates, so the products add no rank and leave official-split scalar MAE at 0.07646.\",\n    \"causal_blanket_diagnosis\": \"The new edge supplies a useful coordinate system, but a purely bilinear use of it does not expand the quadratic function class.\",\n    \"sublated_pivot\": \"Test compact mixed cubic, rational, and saturated interactions selected within each training fold; retain the affine trajectory fit.\",\n    \"risk_kind\": \"basis aliasing\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the full quartic basis\",\n      \"rejected_reason\": \"It ranks 70 on 72 rows and gives 0.12838 scalar MAE on the official split.\"\n    }\n  ],\n  \"rationale\": \"Compare sparse mixed nonlinear terms on fixed folds, selecting terms without the held-out labels, to determine whether a tighter scalar basis can improve both the official split and the worst random fold.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "92c010c090f4a12eec2f1aed0ee0725413be8b79640fd49143a3b32c2b4a8b46",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45255.5,
+      "usage_known": true,
+      "prompt_tokens": 20848,
+      "cached_tokens": 9344,
+      "completion_tokens": 1751
+    }
+  ]
+}

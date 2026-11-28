@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "78f4bdcedd754ae394f83afbd03cf44c",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c01_batch_06__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_06__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:32:50.287208+00:00",
+  "ended_at_utc": "2026-11-28T08:33:25.134225+00:00",
+  "request_sha256": "c4c83b9a1e21bf6397c944e45e763fb0359bfd9a9ca212abe69027420956fc80",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 58097,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34403,
+    "cached_tokens": 9344,
+    "completion_tokens": 1363
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/nested_readout.py <<'PY'\\nexec(open('/tmp/compact.py').read().split('# Composed')[0].split('recs=[]')[0])\\n# Calibrated panel maps are independent of the study labels. Select the\\n# scalar kernel combination by inner LOO within each outer training block.\\nG = build(B(x), cal['v1'][0]); H = build(B(x), cal['v2'][0]);\\nU = np.column_stack([x,G,H]); ug=U-U.mean(0); ug/=np.maximum(U.std(0),1e-8)\\ndef normalized(K):\\n d=K.diagonal(); return K / np.mean(d)\\nQ=normalized(quad(x)@quad(x).T); M=banks['base'][2,:n,:n]; R=banks['base'][1,:n,:n]; W=banks['wide'][4,:n,:n];\\nP=sum(normalized(quad(Z)@quad(Z).T) for Z in (G,H))/2\\nL=normalized(ug@ug.T); J=normalized(L**2)\\nC=np.exp(-cdist(ug,ug,'sqeuclidean')/80)\\nmodels={\\n 'smooth': [8*Q+K for K in (M,R,W,.5*(M+W))],\\n 'panel': [8*Q+w*P+K for w in (.5,4,16) for K in (M,R,W,C)],\\n 'cross': [8*Q+w*(P+J)+K for w in (.5,4,16) for K in (M,R,W,C)]}\\n\\ndef baseline(tr,te):\\n f=quad(x); fac=cho_factor(M[np.ix_(tr,tr)]+.001*np.eye(len(tr))); X=f[tr]; Z=cho_solve(fac,X); V=cho_solve(fac,Y[tr]); w=np.linalg.solve(X.T@Z,X.T@V); return f[te]@w+M[np.ix_(te,tr)]@(V-Z@w)\\n\\ndef nested(tr,te,family):\\n best=float('inf'); result=None\\n for K in family:\\n  a=K[np.ix_(tr,tr)]; b=K[np.ix_(te,tr)]; ev,vec=np.linalg.eigh(a); cy=vec.T@Y[tr];\\n  for reg in (.0001,.0004,.0015,.005,.015,.045):\\n   den=1/(ev+reg); weights=vec@(den[:,None]*cy); score=np.mean(abs(weights[:,0]/((vec**2)@den))); \\n   if score<best: best=score; result=b@weights\\n return result\\n\\ndef summary(name, fn):\\n v=[]\\n for tr,te in splits:\\n  pred=fn(tr,te); mode=np.linalg.svd(Y[tr,1:],full_matrices=False)[2][0]; rank=(pred[:,1:]@mode)[:,None]*mode; err=abs(pred-Y[te]); v.append([err[:,0].mean(),err[:,1:].mean(),abs(rank-Y[te,1:]).mean()]);\\n v=np.asarray(v); print(name,'official/random mean/random max/edge',*[q.round(6).tolist() for q in (v[0],v[1:-1].mean(0),v[1:-1].max(0),v[-1])]); return v\\nsummary('baseline',baseline)\\nfor name, Ks in models.items(): summary(name,lambda tr,te:nested(tr,te,Ks))\\nsummary('nested ensemble',lambda tr,te:.5*baseline(tr,te)+.25*nested(tr,te,models['panel'])+.25*nested(tr,te,models['cross']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/nested_readout.py | tail -5\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic trend plus kernel residual → H2 panel-derived interaction kernel with training-only regularization; baseline public MAEs are 0.028247 scalar and 0.010172 trajectory, with 0.06853 scalar MAE on the coordinate-edge slice.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the best panel model from the previous sweep\",\n      \"rejected_reason\": \"The same held-out slices ranked those models; training-only selection will test whether the edge improvement survives without choosing settings on those slices.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted artifact intact while testing whether panel interaction terms materially reduce scalar error on edge and random holdouts without losing the public pass. Compare the trajectory projection separately so its benefit does not mask a scalar regression.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "19486d5bd23630f7d6a2357b095ed03e0a87226851721fce93923550782e83ce",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37384.55,
+      "usage_known": true,
+      "prompt_tokens": 34403,
+      "cached_tokens": 9344,
+      "completion_tokens": 1363
+    }
+  ]
+}

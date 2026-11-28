@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "71b51e1c8dc649fd96b230ad89722d61",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Fixed_TwoStage_Modular_Online__dev_m101_c02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:52:09.473585+00:00",
+  "ended_at_utc": "2026-11-28T08:52:50.752912+00:00",
+  "request_sha256": "423d3df10035920a7ad2e47803061b64b08e8c18e3079090d6c29308a07be421",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57260,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34990,
+    "cached_tokens": 9344,
+    "completion_tokens": 1668
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/refine.py <<'PY'\\nfrom combine import *\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\np=s['panel_b'];u=p['u'];v=p['v']\\n# Compare shared univariate B links against leakage or interactions between the pairs.\\ndef basis(x,kind,k):\\n if kind=='rat':return x**3/(1+k*x*x)\\n if kind=='rat5':return x**5/(1+k*x*x)\\n if kind=='exp':return x*(-np.expm1(-k*x*x))\\n if kind=='tanh':return np.tanh(k*x)**3\\n if kind=='sin':return np.sin(k*x)**3\\n if kind=='poly':return x**3\\n if kind=='soft':return x**3/(1+k*abs(x))\\n if kind=='pow':return np.sign(x)*abs(x)**k\\n\\ndef fitB(u,v,kind,k,mode):\\n def fn(x,I):\\n  q=x[:,I]; a=basis(q,kind,k)\\n  fs=[q,a]\\n  if mode in ('power','all'):fs.append(a*q*q)\\n  if mode=='pair':fs.extend([(q[:,0]*q[:,1])[:,None], (q[:,0]*q[:,1])[:,None]*q])\\n  return bias(np.column_stack(fs))\\n fits=[]\\n for I,J in [([0,3],[0,1]),([1,2],[2,3])]:\\n  I=list(range(4)) if mode in ('wide','all') else I\\n  F=fn(u,I);C=ls(F,v[:,J]);fits.append((I,C))\\n return lambda x:np.column_stack([fn(x,I)@C for I,C in fits])\\n\\ndef mapB(u,v,kind,mode):\\n def obj(k):return np.mean((fitB(u,v,kind,k,mode)(u)-v)**2)\\n opt=minimize_scalar(obj,bounds=(1.1,7) if kind=='pow' else (.03,3),method='bounded')\\n return fitB(u,v,kind,opt.x,mode),opt.x,np.sqrt(opt.fun)\\n\\nif __name__=='__main__':\\n rng=np.random.default_rng(12);results=[]\\n for kind in ['rat','rat5','exp','tanh','sin','poly','soft','pow']:\\n  for mode in ['strict','wide','pair','power','all']:\\n   err=[]\\n   for ix in [np.arange(24),*[rng.permutation(24) for _ in range(3)]] if False else [np.arange(24),*[np.random.default_rng(seed).permutation(24) for seed in range(3)]]:\\n    f,k,e=mapB(u[ix[:20]],v[ix[:20]],kind,mode);err.append(np.mean(abs(f(u[ix[20:]])-v[ix[20:]])))\\n   f,k,e=mapB(u,v,kind,mode);results.append((np.mean(err),e,kind,mode,k))\\n print('B fits', sorted(results)[:15]);\\n for kind,mode in [('rat','strict'),('exp','wide'),('rat','power')]:\\n  f,k,e=mapB(u,v,kind,mode);R=v-f(u);print(kind,mode,'median,max',np.median(abs(R),axis=0),np.max(abs(R),axis=0)); print('coeff',np.round(ls(bias(np.c_[u,basis(u,kind,k)]),v),4))\\n tr=s['train']; x=inv(tr['x'],calfit(s)); T=tr['traj'];y=tr['y']; f,*_=mapB(u,v,'rat','wide'); z=f(x); V=np.linalg.svd(T,full_matrices=False)[2];a=T@V[0]*V[0,-1];Y=np.c_[y,a,T@V[1],T@V[2]];print('y and trajectory mode correlations',np.corrcoef(Y.T));print('eval',s['eval_times'],s['telemetry_vec']);\\n # Candidate rational denominators with numerator in the same calibrated operator frame.\\n def lsD(z,d):return poly(z,d)[0]\\n for key,w in [('B',z),('cal',x)]:\\n  F=lsD(w,2); r=Y[:,:2]-F@ls(F,Y[:,:2]); print(key,'quad coeff',np.round(ls(F,Y[:,:2]),3));print('largest resid',np.round(np.c_[w,Y[:,:2],r][np.argsort(-np.linalg.norm(r,axis=1))[:8]],3));\\n  for j in range(2):\\n   out=[];tar=Y[:,j];i=np.arange(56); q=np.arange(56,72)\\n   for deg in [1,2]:\\n    b=lsD(w,deg)\\n    def fit(res,b):return ls(b[i]/res[i,None],tar[i]);\\n    for n,h in [(str(l),w[:,l]) for l in range(4)]+[(f'{l}{sg:+}{m}',w[:,l]+sg*w[:,m]) for l,m in combinations(range(4),2) for sg in (-1,1)]:\\n     for shape in [h*h,abs(h)]:\\n      def loss(k):\\n       d=1+k*shape;c=fit(d,b);return np.mean((b[i]@c/d[i]-tar[i])**2)\\n      opt=minimize_scalar(loss,bounds=(0,6),method='bounded');d=1+opt.x*shape;err=np.mean(abs(b[q]@fit(d,b)/d[q]-tar[q]));out.append((err,opt.fun**.5,deg,n,opt.x))\\n   print('denominators',j,sorted(out)[:6],sorted(out,key=lambda r:r[1])[:4])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (generic calibrated panel B) -> H2 (paired panel B with compact downstream rational links); current six-split worst MAEs are 0.132 for the scalar and 0.140 for trajectory amplitude.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Fixed panel splits test whether the apparent pair structure survives held-out rows. The downstream denominator scan tests whether interaction residuals arise from a shared quotient; promote a quotient only if it improves held-out error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f3e2fb51d1ad6a284c47a9928870b9a8b97431fe9764bfa5aebf6d078c5f9e2c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43836.4,
+      "usage_known": true,
+      "prompt_tokens": 34990,
+      "cached_tokens": 9344,
+      "completion_tokens": 1668
+    }
+  ]
+}

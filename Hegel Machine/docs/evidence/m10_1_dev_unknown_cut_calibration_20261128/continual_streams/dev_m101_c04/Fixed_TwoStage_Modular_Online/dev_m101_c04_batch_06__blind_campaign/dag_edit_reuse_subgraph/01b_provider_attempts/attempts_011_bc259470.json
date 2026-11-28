@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bc259470a50848be9696aa2b3eccbd35",
+  "call_seq": 11,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Fixed_TwoStage_Modular_Online__dev_m101_c04_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:24:13.626435+00:00",
+  "ended_at_utc": "2026-11-28T08:25:02.123771+00:00",
+  "request_sha256": "7bc1a2f8df66527d38d1228bc86483ece6a8e8ba37500410e67da2263a404119",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 69276,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38057,
+    "cached_tokens": 9344,
+    "completion_tokens": 2132
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/lift.py <<'PY'\\n\\n\\ndef _quadratic(z):\\n    i, j = np.triu_indices(z.shape[1])\\n    return np.c_[_affine(z), z[:, i] * z[:, j]]\\n\\n\\ndef _scalar_coordinate(d, e, y):\\n    # Identify the scalar index and its response curve using only training rows.\\n    base = np.linalg.lstsq(d, y, rcond=None)[0]\\n    best = None\\n    def fit(kind, init, size, test_kind):\\n        nonlocal best\\n        span = d[:, :size]\\n        ev = e[:, :size]\\n        def evaluate(p, D, S, jac=False):\\n            if kind == 'index':\\n                q = D @ p[:-2]\\n                k = np.exp(p[-1])\\n                h = np.tanh(k*q)\\n                if jac:\\n                    g = p[-2]*(1-h*h)*k\\n                    return np.c_[D*(1+g[:, None]), h, g*q]\\n                return q+p[-2]*h\\n            q = S @ p[d.shape[1]:-1]\\n            if kind == 'sin':\\n                h, g = np.sin(q), np.cos(q)\\n            else:\\n                h = np.tanh(q)\\n                g = 1-h*h\\n            if jac:\\n                return np.c_[D, S*(p[-1]*g[:, None]), h]\\n            return D@p[:d.shape[1]]+p[-1]*h\\n        lo, hi = np.full(len(init), -20.), np.full(len(init), 20.)\\n        if kind == 'index':\\n            lo[-1], hi[-1] = -3, 2.8\\n        opt = least_squares(lambda p:evaluate(p,d,span)-y, np.clip(init,lo+1e-5,hi-1e-5), jac=lambda p:evaluate(p,d,span,True), bounds=(lo,hi), max_nfev=120, ftol=1e-8)\\n        err = np.mean(opt.fun**2)\\n        # Complexity correction favors a single quadratic index over a second index.\\n        quality = err * (1 + 2*len(init)/(len(y)-len(init)))\\n        if best is None or quality < best[0]:\\n            p = opt.x\\n            if kind == 'index' and test_kind == 'latent':\\n                z0,z1 = d@p[:-2],e@p[:-2]\\n            else:\\n                z0,z1 = evaluate(p,d,span),evaluate(p,e,ev)\\n            best = quality,z0,z1,kind,err\\n    for a in (.2, .6, -.25):\\n        for k in (.6, 1.7, 3.):\\n            fit('index',np.r_[base/(1+a*.45),a,np.log(k)],d.shape[1],'latent')\\n    if best[-1] > 0.00014:\\n        for size in (5, d.shape[1]):\\n            for kind in ('tanh','sin'):\\n                for scale in (.6,1.7):\\n                    fit(kind,np.r_[base*.8,scale*base[:size],.5],size,'prediction')\\n    return best[1:3]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    s = inputs['__input__']\\n    train = s['train']\\n    c = _calibrate(s['panel_a'])\\n    panel = s['panel_b']\\n    b = np.linalg.lstsq(_affine(panel['u']), panel['v'], rcond=None)[0]\\n    def design(x):\\n        z = np.linalg.solve(b[1:].T, (_inverse(x,c)-b[0]).T).T\\n        return _quadratic(z)\\n    d,e = design(train['x']),design(s['test']['x'])\\n    a0,a1 = _scalar_coordinate(d,e,train['y'])\\n    # The affine trajectory readout needs the three supported dynamic modes.\\n    traj = train['traj']\\n    centered = traj - traj.mean(axis=0)\\n    _,_,vt = np.linalg.svd(centered, full_matrices=False)\\n    modes = centered @ vt[:3].T\\n    w = np.linalg.lstsq(d,modes,rcond=None)[0]\\n    return {'z_tr':np.c_[a0,d@w], 'z_te':np.c_[a1,e@w], 'y':train['y'], 'traj':traj}\\nPY\\ncp /holdout_task/node_00.py /tmp/calibration_baseline.py\\nsed '/^def run_node/,$d' /tmp/calibration_baseline.py > /holdout_task/node_00.py\\ncat /tmp/lift.py >> /holdout_task/node_00.py\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\ncat > /tmp/stress_lift.py <<'PY'\\nimport numpy as np,pickle,runpy\\nn = runpy.run_path('/holdout_task/node_00.py'); f = runpy.run_path('/holdout_task/_frozen_nodes/node_01.py')['run_node']; s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; train=s['train']; ids=np.arange(len(train['x']))\\nworst=np.zeros(2)\\nfor te in np.array_split(ids,4):\\n tr=np.setdiff1d(ids,te); sc=dict(s,train={k:train[k][tr] for k in ('x','y','traj')},test={'x':train['x'][te]}); o=f({'node_00':n['run_node']({'__input__':sc})}); err=[np.mean(abs(o[k]-train[j][te])) for k,j in [('y_hat','y'),('state_pred','traj')]]; worst=np.maximum(worst,err); print('blocked fold',len(te),err)\\nprint('worst blocked fold',worst.tolist())\\nPY\\npython3 -I /tmp/stress_lift.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: inverse calibration alone -> quadratic dynamic modes and a nonlinear scalar index; the held-out quadratic trajectory probe reached 0.005359 MAE, while cubic scalar regression still missed tolerance at 0.055213.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\",\"ng_t10\"]},\"considered_alternatives\":[{\"option\":\"Use a full cubic coordinate basis\",\"rejected_reason\":\"It worsened held-out trajectory MAE and still missed the scalar tolerance.\"}],\"rationale\":\"The calibrated inputs support quadratic trajectory dynamics. Fit a compact scalar response and three trajectory modes on training rows only, then test whether the four-coordinate handoff lets the unchanged frozen node meet both error limits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "75b2f218750ef16e4b1793a4d737f5da94d2159eb9841fac610859df309c6d20",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 53514.1,
+      "usage_known": true,
+      "prompt_tokens": 38057,
+      "cached_tokens": 9344,
+      "completion_tokens": 2132
+    }
+  ]
+}

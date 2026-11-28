@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1c1ca9bad5114ad18b42ec78abde3146",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Fixed_TwoStage_Modular_Online__dev_m101_c02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:52:52.911813+00:00",
+  "ended_at_utc": "2026-11-28T08:53:25.592162+00:00",
+  "request_sha256": "68337a86dfb833d49b686ad926c7f4401e0456985b820e2ba4aa64014c6c974d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65952,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38828,
+    "cached_tokens": 9344,
+    "completion_tokens": 1114
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/odd.py <<'PY'\\nfrom maps import *\\nfrom scipy.optimize import least_squares\\np=s['panel_b'];u=p['u'];v=p['v']\\ndef trans(x,k,n,name):\\n z=np.sign(x)*abs(x)**n\\n if name=='tanh':return np.tanh(k*z)\\n if name=='rat':return z/(1+k*z*z)\\n if name=='hyp':return z/np.sqrt(1+k*z*z)\\n if name=='soft':return z/(1+k*abs(z))\\n if name=='atan':return np.arctan(k*z)\\n if name=='exp':return z*np.exp(-k*z*z)\\n if name=='sinh':return np.arcsinh(k*z)\\n if name=='direct':return np.tanh(k*x)**n\\n\\ndef fit(u,v,name,kind,n0=3):\\n def design(x,p):\\n  k,n=p[:2]; z=trans(x,k,n,name); add=[]\\n  if kind in ('wide','cross','sat','poly','mix'): add=[x]\\n  if kind=='cross':add+=[x*np.roll(x,1,axis=1)]\\n  if kind=='sat':add+=[np.tanh(p[2]*x)]\\n  if kind=='poly':add+=[x**3]\\n  if kind=='mix':add=[np.tanh(p[2]*x)]\\n  return bias(np.column_stack([z]+add))\\n def err(p):\\n  F=design(u,p);return (F@ls(F,v)-v).ravel()\\n r=least_squares(err,[.8,n0,1.1],bounds=([.005,1.02,.05],[25,7,15]),max_nfev=120);p=r.x;C=ls(design(u,p),v)\\n return np.sqrt(np.mean(r.fun**2)),p,C,lambda x:design(x,p)@C\\nif __name__=='__main__':\\n from itertools import product\\n rows=[]\\n for n,m in product(['tanh','rat','hyp','soft','atan','exp','sinh'],['basic','wide','cross','sat','poly','mix']):\\n  e,p,c,f=fit(u,v,n,m); _,_,_,g=fit(u[:20],v[:20],n,m);d=np.mean(abs(g(u[20:])-v[20:]));rows.append((d,e,n,m,p,c,f))\\n for d,e,n,m,p,c,f in sorted(rows,key=lambda r:r[0])[:12]:print('B',round(d,7),round(e,7),n,m,p); print(np.round(c,4)) if d==min(r[0] for r in rows) else None\\n tr=s['train'];z=inv(tr['x'],calfit(s));T=tr['traj'];Y=np.c_[tr['y'],T];\\n for d,e,n,m,p,c,f in sorted(rows,key=lambda r:r[0])[:8]:\\n  X=f(z);print(n,m,[(float(np.mean(abs((A[56:]@ls(A[:56],Y[:56])-Y[56:])[:,0]))),float(np.mean(abs((A[56:]@ls(A[:56],Y[:56])-Y[56:])[:,1:]))) ) for A in [bias(X),poly(X,2)[0]]]);\\n print('times',s['eval_times']);print('ranges raw',z.min(0),z.max(0));print('ranges panel',u.min(0),u.max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/odd.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (generic odd panel B basis) -> H2 (saturation applied to coordinate powers); worst six-split MAEs remain 0.132 for the scalar and 0.140 for trajectory amplitude.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Panel B has a strong cubic-like response but simple cubic surrogates leave structured residuals. Testing saturation after the power transform on held-out panel rows distinguishes a missing operator term from downstream readout error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "527e74a46178d5720e5ffef6d56f9124e05e601ece3f1b4db6e278aa62cf9cbb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35312.47,
+      "usage_known": true,
+      "prompt_tokens": 38828,
+      "cached_tokens": 9344,
+      "completion_tokens": 1114
+    }
+  ]
+}

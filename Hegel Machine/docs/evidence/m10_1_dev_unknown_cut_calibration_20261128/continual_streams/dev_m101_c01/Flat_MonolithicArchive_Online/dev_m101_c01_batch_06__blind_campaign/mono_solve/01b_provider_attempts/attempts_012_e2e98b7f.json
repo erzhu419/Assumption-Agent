@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e2e98b7f0efc465e9a62f5d28aead245",
+  "call_seq": 12,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:27:48.997804+00:00",
+  "ended_at_utc": "2026-11-28T08:28:20.374950+00:00",
+  "request_sha256": "0233b848be158e42638bb5d5dd0bafed983ef069e04e42e1870c762d2ac43dc9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67761,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36913,
+    "cached_tokens": 9344,
+    "completion_tokens": 1065
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace('from scipy.optimize import least_squares, nnls', 'from scipy.optimize import nnls')\\nold = '    y = _combine(target, loo, pred, 0)\\\\n    amp = _combine(target, loo, pred, 1)'\\nnew = \\\"    y = .7 * pred['a-rat-5.0'][:, 0] + .3 * pred['bi-dot-1.3'][:, 0]\\\\n    pair_amp = (.4 * pred['a-tanh-0.5'][:, 1] + .3 * pred['a-sin-0.5'][:, 1]\\\\n                + .3 * pred['b-tanh-0.5'][:, 1])\\\\n    amp = .55 * _combine(target, loo, pred, 1) + .45 * pair_amp\\\"\\nassert old in s\\np.write_text(s.replace(old, new))\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\npath='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',path+'batch_solver.py')\\nmod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\\nwith open(path+'public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\ntr=s['train']; x,y,z=(tr[k] for k in ('x','y','traj')); n=len(x)\\nrng=np.random.default_rng(4416)\\nsplits=[np.arange(56,72)]+[v for _ in range(4) for v in np.array_split(rng.permutation(n),5)]\\nsplits += [np.argsort(np.linalg.norm(x-x.mean(0),axis=1))[-14:], np.argsort(x[:,0])[-12:], np.argsort(x[:,3])[:12]]\\nerrors=[]\\nfor v in splits:\\n    i=np.setdiff1d(np.arange(n),v)\\n    out=mod.solve_batch({**s,'train':{'x':x[i],'y':y[i],'traj':z[i]},'test':{'x':x[v]}})\\n    yp,sp=out['y_hat'],out['state_pred']; dz=np.abs(sp-z[v]); errors.append([np.abs(yp-y[v]).mean(), dz.mean(), dz[:,-1].mean()])\\n    np.testing.assert_allclose(out['diagnostics_vec'], [yp.mean(),yp.std(),sp[:,-1].mean(),sp[:,-1].std()], rtol=0, atol=1e-14)\\ne=np.array(errors)\\nprint('MAEs [target, trajectory, terminal]: 56/16',e[0], 'worst repeated',e[:-3].max(0), 'worst boundary',e[-3:].max(0))\\nassert np.all(e[-3:].max(0) < [.065088,.015487,.020279])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted stacking → H2 rational-led target blend and pairwise state blend; component tests gave worst boundary MAEs of 0.057741 for y, 0.014059 for trajectories, and 0.019241 for terminal state.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the calibrated rational kernel alone\",\n      \"rejected_reason\": \"It had a slightly lower maximum boundary error, but the rational-led blend improved average boundary error and worst repeated-split error.\"\n    },\n    {\n      \"option\": \"Add a second temporal mode\",\n      \"rejected_reason\": \"It did not improve worst-boundary trajectory MAE.\"\n    }\n  ],\n  \"rationale\": \"Promote the independently tested target and state blends, then verify the exact saved solver against the public schema, diagnostic identities, and baseline boundary errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "f967f5c18c6767566aaa66d564cd5816fa92d453967bde04aaba6849933baa2e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31342.47,
+      "usage_known": true,
+      "prompt_tokens": 36913,
+      "cached_tokens": 9344,
+      "completion_tokens": 1065
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3fa805c6646c4f1180d6d558ba8bf0b7",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:07:32.533335+00:00",
+  "ended_at_utc": "2026-11-28T08:08:03.601899+00:00",
+  "request_sha256": "670065e9db0200d6d9765bdf4fc1efc01cf432ee6266fb6a70098e22a0c00263",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45327,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27186,
+    "cached_tokens": 9344,
+    "completion_tokens": 1138
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit02.py <<'PY'\\nimport runpy\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\nv = runpy.run_path('/tmp/verify02.py')\\nm,s,c,z,y,splits = (v[k] for k in ('m','s','c','z','y','splits'))\\np = s['panel_a']; u=p['u']; obs=p['v']; mats=[m._calibration_features(u,j) for j in range(4)]\\nres=obs-np.column_stack([a@w for a,w in zip(mats,c)])\\nrows=np.flatnonzero(np.linalg.norm(res,axis=1)<0.01)\\n# Compare channel-specific and shared nonlinear coefficients on held-out panel rows.\\nA=np.zeros((len(u),4,11))\\nfor j,h in enumerate(mats):\\n    A[:,j,2*j:2*j+2]=h[:,:2]\\n    A[:,j,8:]=h[:,2:]\\nerr=[]\\nfor h in rows:\\n    f=rows[rows!=h]\\n    local=np.array([a[h]@m._ls(a[f],obs[f,j]) for j,a in enumerate(mats)])\\n    shared=A[h]@m._ls(A[f].reshape(-1,11),obs[f].ravel())\\n    err.append(np.abs(np.array([local,shared])-obs[h]))\\nerr=np.array(err); print('panel jackknife local/shared MAE and maximum',err.mean((0,2)),err.max((0,2)))\\n# Test whether bounded rational curvature helps beyond the paired interaction.\\n# Denominator choice and strength use only the outer training rows.\\nS=m._scalar(z); q=[z[:,j] for j in range(4)]+[z[:,j]+sg*z[:,k] for j in range(4) for k in range(j+1,4) for sg in (-1,1)]+[S[:,-1]]\\nD=[np.ones((len(z),1))]+[1+a*(w[:,None]/scale)**2 for w,scale in [(w,max(abs(w))) for w in q] for a in (0.001,0.005,0.02,0.1,0.5)]\\nerrs=[]\\nfor i in splits:\\n    f,h=i[:56],i[56:]; scores=[]\\n    for d in D:\\n        X=S/d; train=X[f]; Q,_=np.linalg.qr(train,mode='reduced'); e=y[f]-Q@(Q.T@y[f]); scores.append(np.mean(abs(e/(1-(Q*Q).sum(1)))))\\n    j=np.argmin(scores); X=S/D[j]; baseline=S[h]@m._ls(S[f],y[f]); alt=X[h]@m._ls(X[f],y[f]); errs.append((np.mean(abs(baseline-y[h])),np.mean(abs(alt-y[h])))); print('rational audit',len(errs)-1,'selected',j,'MAE',errs[-1])\\nprint('rational audit mean and worst',np.mean(errs,axis=0),np.max(errs,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit02.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: cyclic cubic calibration with paired scalar interaction and two relaxation modes -> H2: pool calibration coefficients or add rational curvature only if held-out measurements support it; current worst-split MAEs are 0.006356 for y and 0.004517 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode, drift-operator, or within-batch classification audits\",\n      \"rejected_reason\": \"The study supplies continuous outputs, one apparatus-state vector, and no relay state, spatial drift measurements, batch identifiers, or class labels.\"\n    }\n  ],\n  \"rationale\": \"Panel jackknife tests whether pooling the nearly identical cyclic coefficients improves calibration on unseen measurements. Nested denominator selection tests whether omitted pairwise or rational curvature explains scalar residuals rather than fitting noise. Re-run the existing horizon stress and schema checks in the same audit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "afbf384cf36ad0c9f45fb2f98a39ac13535e871d72713d8a5906339e3be26abe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33457.53,
+      "usage_known": true,
+      "prompt_tokens": 27186,
+      "cached_tokens": 9344,
+      "completion_tokens": 1138
+    }
+  ]
+}

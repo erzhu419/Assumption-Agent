@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4997b3ef14bd4e4cade063bfee93dafd",
+  "call_seq": 7,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Flat_MonolithicArchive_Online__dev_m101_c02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:01:19.716914+00:00",
+  "ended_at_utc": "2026-11-28T08:01:54.852366+00:00",
+  "request_sha256": "1e7e65f505ffc74a4781b558d09a7081b7f6c9e938a68e8d05830df4ba0dd5d1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53323,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31817,
+    "cached_tokens": 9344,
+    "completion_tokens": 1387
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/gram101.py <<'PY'\\nexec(open('/tmp/graph101.py').read().split('for key,p,v in')[0])\\nfrom scipy.special import erf\\nu=s['panel_b']['u']; v=s['panel_b']['v']; w=(x-off)/sc\\nprint('A calibration rows',np.sort(np.linalg.norm(a['v']-O(a['u'])@L(O(a['u'][g]),a['v'][g]),axis=1))); print('A matrix',L(O(a['u'][g]),a['v'][g]))\\nprint('times, telemetry',t,s['telemetry_vec']); print('gate',open('/tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json').read())\\nfams={'tanh':lambda q,k:np.tanh(k*q), 'atan':lambda q,k:np.arctan(k*q), 'erf':lambda q,k:erf(k*q), 'exp':lambda q,k:q*(-np.expm1(-k*q*q)), 'rat2':lambda q,k:q**3/(1+k*q*q),'rat4':lambda q,k:q**3/(1+k*q**4),'rat3':lambda q,k:q**3/(1+k*abs(q)**3),'ratabs':lambda q,k:q**3/(1+k*abs(q)),'powers':lambda q,k:q**3+k*q**5,'sat':lambda q,k:np.tanh(k*q**3),'log':lambda q,k:q*np.log1p(k*q*q)}\\nP=lambda q:np.column_stack([q[:,i]*q[:,j] for i,j in combinations(range(4),2)])\\nmodels=[]\\nfor n,f in fams.items():\\n for m in ('shared','mixed','shared+q','mixed+q'):\\n  def des(q,r):\\n   h=f(q,r[0]); F=O(h+r[1]*q) if m.startswith('shared') else np.c_[O(q),h]; return np.c_[F,q*q] if m.endswith('+q') else F\\n  shared=m.startswith('shared'); lo=[.001,-8] if shared else [.001]; hi=[8,8] if shared else [8]\\n  def residual(r):\\n   F=des(u,r);return (F@L(F,v)-v).ravel()\\n  fit=min([least_squares(residual,[k,0] if shared else [k],bounds=(lo,hi),max_nfev=140) for k in [.15,1,2]],key=lambda a:a.cost)\\n  F=des(u,fit.x); C=L(F,v); z=des(w,fit.x)@C; errors=[]\\n  for i,j in folds:\\n   A=np.c_[O(z),z[:,0]*z[:,2]+z[:,1]*z[:,3]]; B=O(z); U,S,V=np.linalg.svd(Y[i,1:],full_matrices=False); T=V[:2]; e=abs(np.c_[A[j]@L(A[i],Y[i,0]),(B[j]@L(B[i],Y[i,1:]@T.T))@T]-Y[j]); errors.append([e[:,0].mean(),e[:,1:].mean()]);\\n  h=np.sum(np.linalg.svd(F,full_matrices=False)[0]**2,axis=1); loo=np.mean(abs(residual(fit.x).reshape(v.shape)/(1-h[:,None]))); models.append((n,m,fit.x,np.sqrt(np.mean(fit.fun**2)),loo,np.array(errors),C,z))\\nfor key in [lambda k:k[4],lambda k:k[5].max(0).sum()]:\\n print('ranking')\\n for n,m,r,rm,loo,e,C,z in sorted(models,key=key)[:10]:print(n,m,r,'panel rmse/loo',rm,loo,'56/16',e[0],'worst',e.max(0))\\nn,m,r,rm,loo,e,C,z=min(models,key=lambda k:k[5].max(0).sum()); print('best C',C); print('scalar full quadratic',L(np.c_[O(z),P(z),z*z],Y[:,0])); ee=Y[:,1:]-O(z)@L(O(z),Y[:,1:]); print('spatial residual sv',np.linalg.svd(ee,compute_uv=False)); print('trajectory residual correlation with sensor polynomials',L(np.c_[O(z),P(z),z*z],ee))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/gram101.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unconstrained panel B regression → H2 shared coordinatewise operator with separate scalar and rank-two trajectory readouts; the best shared candidate so far has worst-split MAEs of 0.0129 for y and 0.0166 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Choose the operator solely by panel B fit\",\n      \"rejected_reason\": \"The panel fit and worst held-out response errors rank the current operators differently.\"\n    }\n  ],\n  \"rationale\": \"Check whether the diagonal calibration leaves measurable structure and whether rational or even terms explain panel B residuals. Compare those candidates on both held-out outputs with the trajectory modes learned only from training rows.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "69d5e2f26f94181f36eb87937e0ec7d2eff58911994b644b5f9872cd4dbadcf0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37601.93,
+      "usage_known": true,
+      "prompt_tokens": 31817,
+      "cached_tokens": 9344,
+      "completion_tokens": 1387
+    }
+  ]
+}

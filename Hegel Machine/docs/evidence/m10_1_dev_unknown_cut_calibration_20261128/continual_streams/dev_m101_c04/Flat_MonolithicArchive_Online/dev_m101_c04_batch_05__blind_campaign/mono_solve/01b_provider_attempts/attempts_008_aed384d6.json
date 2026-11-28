@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aed384d6aacc425e9db8869679a9c5a6",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:25:44.961822+00:00",
+  "ended_at_utc": "2026-11-28T08:26:20.561591+00:00",
+  "request_sha256": "15162846ab360a3d71a026a88459eaa56d72a49dcf49054fe6889918bdd53266",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60945,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36410,
+    "cached_tokens": 9344,
+    "completion_tokens": 1512
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc=Path('/tmp/hegel_continual_archive/dev_m101_c04_batch_03_solver.py').read_text()\\nPath('batch_solver.py').write_text(src[:src.index('def _features')].replace('Calibrated dead-zone operator and two-mode relaxation predictor.', 'Calibrated dead-zone operator with a rational scalar readout.'))\\nPY\\ncat >> batch_solver.py <<'PY'\\ndef _scalar(z, y, nz):\\n    interaction = z[:, 0]*z[:, 2] + z[:, 1]*z[:, 3]\\n    x = _affine(np.column_stack((z, interaction)))\\n    train = x[:nz]\\n    init = _ls(train, y)\\n\\n    def design(w):\\n        return np.column_stack((np.ones(len(w)), w, w/(1+w*w)))\\n\\n    def residual(p):\\n        a = design(train @ p)\\n        return a @ _ls(a, y) - y\\n\\n    best = min((least_squares(residual, scale*init, max_nfev=140)\\n                for scale in (.55, 1.2, 2.3)), key=lambda fit: fit.cost)\\n    a = design(x @ best.x)\\n    return a[nz:] @ _ls(a[:nz], y)\\n\\n\\ndef solve_batch(study):\\n    train = study['train']\\n    n = len(train['x'])\\n    x = np.concatenate((train['x'], study['test']['x']))\\n    offset, gain = _calibrate(study['panel_a'])\\n    z = _operator(study['panel_b'])((x-offset)/gain)\\n    y = _scalar(z, train['y'], n)\\n    f = _affine(z)\\n    state = f[n:] @ _ls(f[:n], train['traj'])\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat >/tmp/verify05.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nsp=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; y=t['y']; traj=t['traj']; x=t['x']; a,g=m._calibrate(s['panel_a']); z=m._operator(s['panel_b'])((x-a)/g)\\nrng=np.random.default_rng(1448); folds=[('public',np.arange(72))]+[(f'random{i}',rng.permutation(72)) for i in range(16)]+[('largest-z',np.argsort(np.linalg.norm(z,axis=1))),('largest-x',np.argsort(np.linalg.norm((x-a)/g,axis=1)))]+[(f'z{k}{side:+}',np.argsort(side*z[:,k])) for k in range(4) for side in [-1,1]]\\nrs=[]; ts=[]\\nfor label,ix in folds:\\n i,j=ix[:56],ix[56:]; o=m.solve_batch(dict(s,train={k:t[k][i] for k in ('x','y','traj')},test={'x':x[j]})); yp,st,d=(o[k] for k in ('y_hat','state_pred','diagnostics_vec')); assert yp.shape==(16,) and st.shape==(16,8) and d.shape==(4,); assert all(np.isfinite(v).all() for v in (yp,st,d)); np.testing.assert_array_equal(d,[yp.mean(),yp.std(),st[:,-1].mean(),st[:,-1].std()]); E=abs(st-traj[j]); rs.append([abs(yp-y[j]).mean(),E.mean(),E.mean(axis=0).max()]);\\n variants=[]\\n for A in (m._affine(z),z):\\n  Q,R=np.linalg.qr(A[i]); target=Q.T@traj[i]; U,S,V=np.linalg.svd(target,full_matrices=False)\\n  for rank in (2,len(S)):\\n   c=m._ls(R,(U[:,:rank]*S[:rank])@V[:rank]); e=abs(A[j]@c-traj[j]); variants.append(e.mean())\\n ts.append(variants)\\n print(label,np.round(rs[-1],6),np.round(variants,6))\\nprint('worst metric',np.max(rs,axis=0),'trajectory variant worst',np.max(ts,axis=0),'means',np.mean(ts,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify05.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (cross-products outside saturation) -> H2 (tied cross-products inside a shared rational index); worst-split scalar MAE is 0.005486 and trajectory MAE is 0.004834 on the earlier splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the tanh readout\",\n      \"rejected_reason\": \"The rational readout has lower error on the high-amplitude split.\"\n    }\n  ],\n  \"rationale\": \"Write the leading model and verify it in isolation. Fresh random and coordinate-tail splits will detect extrapolation failures; trajectory rank and intercept comparisons will show whether a smaller model improves the worst slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "271aea512d8a7fba08f764cbf63714e43e6bdec3cadf2ee75cfa889aefa857c6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40702.98,
+      "usage_known": true,
+      "prompt_tokens": 36410,
+      "cached_tokens": 9344,
+      "completion_tokens": 1512
+    }
+  ]
+}

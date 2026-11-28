@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5ec7755d34024c6eb1fef97820d6c16a",
+  "call_seq": 12,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Flat_MonolithicArchive_Online__dev_m101_c02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:37:52.994619+00:00",
+  "ended_at_utc": "2026-11-28T08:38:31.321378+00:00",
+  "request_sha256": "42c34ed0e66962ba3e1ec00f7c114c59323f79bf47cddf53fed0690f620d88f2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 83930,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43441,
+    "cached_tokens": 9344,
+    "completion_tokens": 1489
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; export OPENBLAS_NUM_THREADS=1; cat > /tmp/refine06.py <<'PY'\\nimport pickle,sys,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom sklearn.model_selection import KFold\\nsys.path.insert(0,'/holdout_task'); import batch_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y,T=tr['y'],tr['traj']; n=len(y); u,v=(s['panel_b'][k] for k in ('u','v')); w=m._calibrate(s['panel_a'],tr['x']); both=np.c_[y,T]\\nfolds=[(np.arange(56),np.arange(56,n)),*KFold(4,shuffle=True,random_state=4).split(w)]; r=np.linalg.norm(w,axis=1); order=np.argsort(r); folds.append((order[:56],order[56:]));\\ndef feature(q,p):\\n h=q**3/(1+p[0]*q*q)\\n for a,f in zip(p[1::2],p[2::2]):h+=a*np.sin(f*q)\\n return np.c_[m._aff(q),h]\\ndef score(P,j):\\n e=abs(P-both[j]);return [e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean()]\\nfor nh in (2,3):\\n bounds=([.05]+[-.2,2]*nh,[3]+[.2,40]*nh)\\n starts=[[.72,.008,10,.004,g] for g in (5,8,13,16,20,25,29,34)]\\n if nh==3:starts=[p+[.002,g] for p in starts for g in (14,22,31,37) if abs(p[-1]-g)>2]\\n def panel(p):\\n  A=feature(u,p); return A,m._ls(A,v)\\n def pr(p):\\n  A,c=panel(p);return (A@c-v).ravel()\\n fits=sorted((least_squares(pr,p,bounds=bounds,max_nfev=130) for p in starts),key=lambda o:o.cost); p=fits[0].x\\n print('panel',nh,p,np.std(pr(p)),flush=True)\\n _,c=panel(p); z=feature(w,p)@c\\n for weight in (0,.20,.65):\\n  errors=[]; errors_r2=[]\\n  for i,j in folds:\\n   dy=m._design(w,z,'scalar'); x=dy[i]; cy=m._ls(x,y[i]); init=np.r_[0,cy[1:]]\\n   def link(d,b):\\n    h=b[0]+d[:,1:]@b[1:]; return np.c_[d[:,0],h+np.arctan(h)]\\n   def profile(P,output=False):\\n    p,b=P[:1+2*nh],P[1+2*nh:]; A,c=panel(p); Z=feature(w,p)@c; D=m._design(w,Z,'scalar'); X=m._design(w,Z,'trajectory'); d=link(D,b); cy=m._ls(d[i],y[i]); ct=m._ls(X[i],T[i]); pred=X@ct\\n    if output:return d[j]@cy,pred[j],pred[i]\\n    return np.r_[(A@c-v).ravel(), .45*weight*(d[i]@cy-y[i]), (weight/np.sqrt(T.shape[1]))*(pred[i]-T[i]).ravel()]\\n   if weight:\\n    B=([*bounds[0],*([-np.inf]*len(init))],[*bounds[1],*([np.inf]*len(init))]); param=min((least_squares(profile,np.r_[f.x,init*k],bounds=B,max_nfev=140) for f in fits[:2] for k in (1,2)),key=lambda r:r.cost).x; yp,tp,fit=profile(param,True)\\n   else:\\n    X=m._design(w,z,'trajectory'); fit=X@m._ls(X[i],T[i]); tp,fit=fit[j],fit[i]; yp=m._scalar(x,y[i],dy[j],'fixed')\\n   modes=np.linalg.svd(fit,full_matrices=False)[2][:2]; errors.append(score(np.c_[yp,tp],j));errors_r2.append(score(np.c_[yp,tp@modes.T@modes],j))\\n  for label,E in [('free',errors),('rank2',errors_r2)]: print(nh,weight,label,'56/16',np.round(E[0],6),'worst',np.round(np.max(E,0),6),'outer',np.round(E[-1],6),flush=True)\\nPY\\npython3 -I /tmp/refine06.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (one-harmonic panel B) -> H2 (two harmonics with the shared cyclic gate and fixed arctangent link); measured worst-fold MAEs are 0.017611 for y, 0.006220 for trajectories, and 0.009183 for the endpoint.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Freeze the schema-valid one-harmonic solver\",\n      \"rejected_reason\": \"The tested two-harmonic fixed-link model roughly halved the worst trajectory and endpoint errors.\"\n    }\n  ],\n  \"rationale\": \"Before promoting the two-harmonic solver, check whether fold-local joint fitting or temporal rank reduction further lowers held-out error, including on the highest-norm calibrated inputs. Retain the simpler model unless a challenger improves the independent output metrics.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "4e22434eb37d93ee6f4351fe38c7df8b03ea67be0c5938761126991f5181b08b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40871.17,
+      "usage_known": true,
+      "prompt_tokens": 43441,
+      "cached_tokens": 9344,
+      "completion_tokens": 1489
+    }
+  ]
+}

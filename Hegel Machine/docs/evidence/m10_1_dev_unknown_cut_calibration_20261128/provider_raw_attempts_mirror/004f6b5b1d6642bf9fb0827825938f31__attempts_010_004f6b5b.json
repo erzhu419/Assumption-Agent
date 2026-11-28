@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "004f6b5b1d6642bf9fb0827825938f31",
+  "call_seq": 10,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Flat_MonolithicArchive_Online__dev_m101_c01_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:10:27.612945+00:00",
+  "ended_at_utc": "2026-11-28T08:11:07.526078+00:00",
+  "request_sha256": "3e9c4a911af93fdf8971833b014b8da2716fef3171ba10b929473889de82caf8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59797,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35954,
+    "cached_tokens": 9344,
+    "completion_tokens": 1591
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/holdout_task/batch_solver.py <<'PY'\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.optimize import minimize\\n\\n\\ndef _quadratic(x):\\n    return np.column_stack([np.ones(len(x)), x, *(x[:, i] * x[:, j]\\n        for i, j in combinations_with_replacement(range(x.shape[1]), 2))])\\n\\n\\ndef _readout(x, xt, y):\\n    p, pt = _quadratic(x), _quadratic(xt)\\n    a = np.column_stack([np.ones(len(x)), x])\\n    at = np.column_stack([np.ones(len(xt)), xt])\\n    d = np.sum((x[:, None] - x[None, :])**2, axis=2)\\n    dt = np.sum((xt[:, None] - x[None, :])**2, axis=2)\\n    k, kt = p @ p.T, pt @ p.T\\n    pred = np.zeros(len(xt))\\n    for weight, length, scale, noise, dot in (\\n        (0.65, 1.5, 10., .002, True),\\n        (0.35, 1.2, 10., .005, False),\\n    ):\\n        g = np.exp(-d / (2 * length**2))\\n        gt = np.exp(-dt / (2 * length**2))\\n        if dot:\\n            g *= a @ a.T\\n            gt *= at @ a.T\\n        factor = cho_factor(k + scale * g + noise * np.eye(len(x)))\\n        pred += weight * ((kt + scale * gt) @ cho_solve(factor, y))\\n    return pred\\n\\n\\ndef _state(x, xt, z):\\n    mode = np.linalg.svd(z, full_matrices=False)[2][0]\\n    amplitude = z @ mode\\n    p, pt = _quadratic(x), _quadratic(xt)\\n    d = (x[:, None] - x[None, :])**2\\n    dt = (xt[:, None] - x[None, :])**2\\n    k, kt = p @ p.T, pt @ p.T\\n    eye = np.eye(len(x))\\n\\n    def kernel(d, base, h):\\n        r = np.sqrt(5 * (d @ np.exp(h[:4])))\\n        return base + np.exp(h[4]) * (1 + r + r*r/3) * np.exp(-r)\\n\\n    def objective(h):\\n        factor = cho_factor(kernel(d, k, h) + np.exp(h[5]) * eye)\\n        alpha = cho_solve(factor, amplitude)\\n        return (0.5 * amplitude @ alpha + np.log(factor[0].diagonal()).sum()\\n                + .2 * np.sum((h[:4] - h[:4].mean())**2))\\n\\n    h = minimize(objective, [-2., -2., -2., -2., -1., -10.],\\n                 bounds=[(-7, 3)]*4 + [(-9, 4), (-13, -8)],\\n                 method='L-BFGS-B').x\\n    factor = cho_factor(kernel(d, k, h) + np.exp(h[5]) * eye)\\n    amp_test = kernel(dt, kt, h) @ cho_solve(factor, amplitude)\\n    return amp_test[:, None] * mode\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x, xt = np.asarray(train['x']), np.asarray(study['test']['x'])\\n    y = _readout(x, xt, np.asarray(train['y']))\\n    state = _state(x, xt, np.asarray(train['traj']))\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\ncat >/tmp/cv_final.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom sklearn.model_selection import KFold\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x,y,z=(s['train'][k] for k in ('x','y','traj'))\\nfolds=[(np.arange(56),np.arange(56,72)),*KFold(5,shuffle=True,random_state=12).split(x)]\\nr=np.argsort(np.linalg.norm(x,axis=1)); folds.append((r[:-12],r[-12:]))\\nfor i,j in folds:\\n d=solve_batch(dict(s,train=dict(x=x[i],y=y[i],traj=z[i]),test=dict(x=x[j])))\\n ye=abs(y[j]-d['y_hat']); ze=abs(z[j]-d['state_pred']); print(np.round([ye.mean(),ze.mean(),ye.max(),*ze.mean(0)],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cv_final.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared state-linked readout → H2 separate interaction kernel and low-rank trajectory; the strongest tested readout kernel reached 0.02125 MAE on 56/16 and 0.03587 on its worst shuffled fold.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Stack the readout on predicted trajectories\",\n      \"rejected_reason\": \"Even observed trajectories did not yield a consistent improvement in the readout oracle.\"\n    }\n  ],\n  \"rationale\": \"Save a standalone solver using the best-supported family for each output. Check the actual combined solver on the specified split, shuffled folds, and largest-norm inputs; per-horizon state errors will show whether rank-one compression sacrifices an evaluation time.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "5a5205afc332ef28135850dac08f0c03660fd3e6e91d47f419f5465b47eaec72",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42469.33,
+      "usage_known": true,
+      "prompt_tokens": 35954,
+      "cached_tokens": 9344,
+      "completion_tokens": 1591
+    }
+  ]
+}

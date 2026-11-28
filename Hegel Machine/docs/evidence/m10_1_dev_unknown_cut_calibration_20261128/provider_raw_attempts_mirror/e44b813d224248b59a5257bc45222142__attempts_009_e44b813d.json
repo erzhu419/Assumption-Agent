@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e44b813d224248b59a5257bc45222142",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Hegel_UnknownCut_GraphDiscovery_Online__dev_m101_c03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:23:37.774323+00:00",
+  "ended_at_utc": "2026-11-28T08:24:04.719014+00:00",
+  "request_sha256": "9bdb18337e3e1f402ddcd986ccc619c9f025f3513be5d0241e32db5f0ab9a94d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64667,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38827,
+    "cached_tokens": 9344,
+    "completion_tokens": 1022
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/isolate.py <<'PY'\\nfrom graphprobe import *\\nfrom itertools import combinations_with_replacement as cr\\nT=S['train']; y=T['y']; h=T['traj']; t=S['eval_times']; ai,af,B,C,D=ops(S); z=ai(T['x']); c,d=C(z),D(z); b=B(z)\\ndef p(x,k):\\n i=list(cr(range(x.shape[1]),k));return np.stack([np.prod(x[:,j],axis=1) for j in i],axis=1),i\\nP2,I2=p(z,2); P3,I3=p(z,3); dot=(c*d).sum(1); X=one(np.c_[P2,P3,c,d,dot]); Y=np.c_[y,h]; W=fit(X,Y); E=Y-X@W\\nnames=['1']+['z'+''.join(map(str,q)) for q in I2+I3]+[f'{a}{j}' for a in 'cd' for j in range(4)]+['dot']; print('base rms',E.std(0)); print('dot coefficients',W[-1]); print('coeffs');\\nfor k,w in zip(names,W): print(k,w)\\nV=-np.expm1(-t[:,None]*np.array([.396,1.7987,5.27])); print('term profiles normalized at last time');\\nfor nm,q in [('cubic',P3),('dot',dot[:,None]),('quad',P2),('cc',c),('dd',d),('resid',E[:,1:])]:\\n if nm=='resid': R=q\\n else:\\n  L=np.c_[X,q]; inds=np.arange(len(X.T));\\n  key={'cubic':np.arange(11,31),'dot':[39],'quad':np.arange(1,11),'cc':np.arange(31,35),'dd':np.arange(35,39)}[nm]; G=X[:,np.setdiff1d(inds,key)]; R=h-G@fit(G,h); q=q-G@fit(G,q); R=q@fit(q,R)\\n _,s,vt=np.linalg.svd(R,full_matrices=False); print(nm,s[:5],vt[:3]/vt[:3,-1:]);\\n for label,f in [('exp',lambda k:-np.expm1(-k*t)),('rat',lambda k:t/(1+k*t)),('log',lambda k:np.log1p(k*t)),('power',lambda k:t**k),('exp-linear',lambda k:t*np.exp(-k*t)),('cos',lambda k:1-np.cos(k*t)),('tanh',lambda k:np.tanh(k*t))]:\\n  v=vt[0]/vt[0,-1]; r=minimize_scalar(lambda k:np.linalg.norm(v-f(k)/f(k)[-1]),bounds=(.005,5),method='bounded'); print(label,round(r.x,5),round(r.fun,6),end=' | ')\\n print()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/isolate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 separate parity kernels -> H2 calibrate a shared branch dot product and isolate the remaining trajectory mode; observed worst-fold MAEs are 0.0108 for the best scalar model and 0.0613 for the best trajectory model by worst-fold MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the same kernel for both outputs\",\"rejected_reason\":\"The calibrated cubic-plus-dot basis nearly explains the scalar, but a coherent temporal residual remains and is better addressed separately.\"}],\"rationale\":\"Inspect temporal profiles contributed by the cubic terms, the branch dot product, and the residual. A consistent profile would let us fit each mode with fewer spatial terms; otherwise retain the validated regularized trajectory model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "50e0bd339ce43aff9770df190bb74783b42d4fc42040d0a894870e5dfb03632d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29510.43,
+      "usage_known": true,
+      "prompt_tokens": 38827,
+      "cached_tokens": 9344,
+      "completion_tokens": 1022
+    }
+  ]
+}

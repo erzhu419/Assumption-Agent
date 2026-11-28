@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a7d4c3915e834a769364f44099921488",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Fixed_TwoStage_Modular_Online__dev_m101_c01_batch_04__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:10:58.307432+00:00",
+  "ended_at_utc": "2026-11-28T08:11:33.348519+00:00",
+  "request_sha256": "2856645d9dce27c2dadd0849c1d89f3d2d13d145b858d5ef4a58584c807ba144",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55241,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34493,
+    "cached_tokens": 9344,
+    "completion_tokens": 1359
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cat > /tmp/rat04.py <<'PY'\\nfrom discover04 import *\\nfrom scipy.linalg import solve\\nfrom scipy.special import expit\\nA,B,C,D=fit_all(s); x=s['train']['x']; z=s['train']['traj']; y=s['train']['y']; t=s['eval_times']; u=aff(x)@B; rng=np.random.default_rng(91); splits=[(np.arange(56),np.arange(56,72))]+[(p[:56],p[56:]) for p in (rng.permutation(72) for _ in range(7))];\\ndef ridge(F,Y,pen):\\n return solve(F.T@F+np.diag(np.broadcast_to(pen,(F.shape[1],))**2),F.T@Y,assume_a='pos')\\ndef mult(f,g):return (f[:,:,None]*g[:,None,:]).reshape(len(f),-1)\\nH=poly(x,2); M=poly(u,3)[:,15:]; G=np.c_[C(u),D(u)]; L=np.c_[H,G,mult(u,G),M]; J=np.c_[H,D(u),mult(u,D(u))]; K=np.c_[H,np.tanh(u),np.sign(u)*(-np.expm1(-1.8*abs(u))),np.sqrt(1+u*u)-1,M];\\nrows=[]\\nfor i,j in splits:\\n vals=[]\\n for name,F,pen in [('base',L,.24),('alt',K,.14),('quad',H,.02),('mix',J,.015)]:\\n  vals.append((name,np.mean(abs(F[j]@ridge(F[i],y[i],pen)-y[j]))))\\n for name,F,pen in [('Q',H,.015),('P',np.c_[H,M],.17),('L',L,.23),('K',K,.15)]:\\n  for kind in ['rank1','rank2','diag','poly','soft','asym']:\\n   W=aff(u); n={'rank1':5,'rank2':10,'diag':4,'poly':14,'soft':5,'asym':5}[kind]\\n   def den(p):\\n    if kind.startswith('rank'): return 1+np.sum((W@p.reshape(-1,5).T)**2,axis=1)\\n    if kind=='diag': return 1+(u*u)@(p*p)\\n    if kind=='poly': return .3+np.exp(np.clip(H[:,1:]@p,-4,4))*.7\\n    if kind=='soft': return 1+abs(W@p)\\n    return 1+np.maximum(W@p,0)**2\\n   def res(p,pred=False):\\n    d=den(p); T=F[i]/d[i,None]; w=ridge(T,y[i],pen); return F[j]@w/d[j] if pred else np.r_[T@w-y[i],pen*w,(.035 if kind=='poly' else .022)*p]\\n   starts=np.r_[np.zeros((1,n)),np.random.default_rng(4).normal(0,.45,(6 if name=='Q' else 3,n))]; b=min((least_squares(res,p,max_nfev=125,diff_step=1e-5) for p in starts),key=lambda a:a.cost); yh=res(b.x,True); vals.append((name+kind,np.mean(abs(yh-y[j]))));\\n   if len(rows)==0 and name=='Q': print('Q',kind,'coef',b.x.round(3),'fit',np.mean(abs(res(b.x)[:len(i)])))\\n rows.append(dict(vals))\\nfor k in sorted(rows[0],key=lambda k:np.mean([r[k] for r in rows])): print(k,np.round([r[k] for r in rows],5),'mean/worst',np.round([np.mean([r[k] for r in rows]),max(r[k] for r in rows)],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rat04.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (penalized panel-interaction readout) -> H2 (positivity-constrained rational readout); eight-split worst MAE so far is 0.04001 for y and 0.01059 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Choose the joint-panel cubic by mean error alone\",\n      \"rejected_reason\": \"Its worst scalar split is 0.04783, versus 0.04001 for a simpler candidate.\"\n    }\n  ],\n  \"rationale\": \"Test whether a compact, positive denominator reduces scalar error across the same eight splits. If it only improves fit or one split, retain the regularized panel readout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "56bb34d0d539db29e0437d4ffcd7c5391e97e5ed8df26811d40557baf0d6e65d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37477.35,
+      "usage_known": true,
+      "prompt_tokens": 34493,
+      "cached_tokens": 9344,
+      "completion_tokens": 1359
+    }
+  ]
+}

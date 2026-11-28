@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1e0900a884fd49379e1ef64ed4eddc83",
+  "call_seq": 5,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Fixed_TwoStage_Modular_Online__dev_m101_c02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:05:14.375268+00:00",
+  "ended_at_utc": "2026-11-28T08:05:56.175403+00:00",
+  "request_sha256": "1f9d47bb9bd418990b1a288d78f7bc7ab3f7a50ce167db0ba46f63ade07222a9",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 38472,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26267,
+    "cached_tokens": 9344,
+    "completion_tokens": 1712
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && (PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'variable projection separable nonlinear least squares ridge profiling' 2>/dev/null || true) && cat > node_01.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(z):\\n    return np.column_stack((np.ones(len(z)), z))\\n\\n\\ndef _scalar_basis(z):\\n    return np.column_stack((_affine(z), z[:, 0] * z[:, 2], z[:, 1] * z[:, 3]))\\n\\n\\ndef _ridge(z, p):\\n    q = z @ p[:-1] + p[-1]\\n    return q / (1.0 + q * q)\\n\\n\\ndef _predict_scalar(z, y, z_test):\\n    basis = _scalar_basis(z)\\n    orthogonal, _ = np.linalg.qr(basis, mode='reduced')\\n\\n    def remove_basis(v):\\n        return v - orthogonal @ (orthogonal.T @ v)\\n\\n    target = remove_basis(y)\\n    direction = np.linalg.lstsq(basis, y, rcond=None)[0][1:5]\\n    direction /= max(np.linalg.norm(direction), 1e-12)\\n\\n    # Profile out the affine, interaction, and ridge-amplitude coefficients.\\n    def residual(p):\\n        h = remove_basis(_ridge(z, p))\\n        return h * ((h @ target) / max(h @ h, 1e-24)) - target\\n\\n    fit = min(\\n        (least_squares(residual, np.r_[scale * direction, bias],\\n                       bounds=(-5.0, 5.0), max_nfev=300)\\n         for scale in (0.6, 1.4, 2.5) for bias in (0.0, 0.25, -0.25)),\\n        key=lambda result: result.cost,\\n    )\\n    design = np.column_stack((basis, _ridge(z, fit.x)))\\n    coeff = np.linalg.lstsq(design, y, rcond=None)[0]\\n    return np.column_stack((_scalar_basis(z_test), _ridge(z_test, fit.x))) @ coeff\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    train = inputs['__input__']['train']\\n    coordinates = inputs['node_00']\\n    z, z_test = coordinates['z_tr'], coordinates['z_te']\\n    y_hat = _predict_scalar(z, train['y'], z_test)\\n    state_coeff = np.linalg.lstsq(_affine(z), train['traj'], rcond=None)[0]\\n    state_pred = _affine(z_test) @ state_coeff\\n    terminal = state_pred[:, -1]\\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), terminal.mean(), terminal.std()])\\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': diagnostics}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\ndef load(path):\\n    scope = {}\\n    exec(compile(Path(path).read_text(), path, 'exec'), scope)\\n    return scope['run_node']\\n\\ncalibrate = load('_frozen_nodes/node_00.py')\\nsink = load('node_01.py')\\nwith open('public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\ntrain = study['train']\\nidx = np.arange(len(train['y']))\\nz = calibrate({'__input__': study})['z_tr']\\nradius = np.linalg.norm(z, axis=1)\\nslices = {f'block_{i}': v for i, v in enumerate(np.array_split(idx, 6))}\\nslices['outer_radius'] = np.argsort(radius)[-12:]\\nworst = np.zeros(2)\\nfor name, valid in slices.items():\\n    fit = np.setdiff1d(idx, valid)\\n    batch = copy.deepcopy(study)\\n    batch['train'] = {key: train[key][fit] for key in ('x', 'y', 'traj')}\\n    y, end = train['y'][fit], train['traj'][fit, -1]\\n    batch['train']['summary'] = np.array([y.mean(), y.std(), end.mean(), end.std()])\\n    batch['test'] = {'x': train['x'][valid]}\\n    out = sink({'__input__': batch, 'node_00': calibrate({'__input__': batch})})\\n    err = np.array([np.mean(np.abs(out['y_hat'] - train['y'][valid])), np.mean(np.abs(out['state_pred'] - train['traj'][valid]))])\\n    print(name, *(f'{e:.6f}' for e in err))\\n    worst = np.maximum(worst, err)\\nprint('worst scalar/trajectory slice', worst)\\nassert np.all(worst <= 0.035)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: frozen coordinates support affine trajectory predictions -> H2: an affine scalar readout with two pair interactions and a rational projection repairs scalar curvature; probe MAE was 0.01244 on the official scalar split and 0.01779 on the worst alternate scalar block.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Use a full quadratic plus nonlinear ridge\",\"rejected_reason\":\"It lowers in-sample error but worsens the official scalar split from 0.01244 to 0.01672.\"},{\"option\":\"Impose a shared exponential trajectory\",\"rejected_reason\":\"An affine map already predicts the measured trajectory accurately at every sampled time.\"}],\"rationale\":\"Fit the scalar projection from training rows only and leave the frozen coordinate transform unchanged. The official validator detects interface and acceptance failures; contiguous blocks and the outer-radius slice test whether the compact readout still meets tolerance when prediction requires more extrapolation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c7961ed768f58f7aeb4bfab424c9bb28e89037b79a3ce415ce09380df9229bfe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44306.72,
+      "usage_known": true,
+      "prompt_tokens": 26267,
+      "cached_tokens": 9344,
+      "completion_tokens": 1712
+    }
+  ]
+}

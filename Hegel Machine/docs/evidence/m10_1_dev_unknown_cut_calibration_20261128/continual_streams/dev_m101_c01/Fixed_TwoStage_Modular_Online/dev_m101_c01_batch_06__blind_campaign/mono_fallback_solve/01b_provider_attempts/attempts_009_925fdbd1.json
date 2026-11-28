@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "925fdbd1ffcb4aabb1e4f4dd9b3ca96b",
+  "call_seq": 9,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c01__Fixed_TwoStage_Modular_Online__dev_m101_c01_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:29:10.001210+00:00",
+  "ended_at_utc": "2026-11-28T08:29:44.764433+00:00",
+  "request_sha256": "d5bc6720a82c6bac21314366f4c5ad46ad439098ee920bf63565e6bdcc794091",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58657,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35999,
+    "cached_tokens": 9344,
+    "completion_tokens": 1377
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '34,90p' /tmp/hegel_continual_archive/dev_m101_c01_batch_02_solver.py; cat >/tmp/joint.py <<'PY'\\nfrom challenge import *\\nfrom scipy.optimize import minimize_scalar\\nx,y,z=[S['train'][k] for k in ('x','y','traj')];t=S['eval_times']; sp=spaces(S,x); ss=list(folds(x));\\n\\ndef amplitude(t,Z):\\n def fit(r):\\n  b=-np.expm1(-r*t); c=Z@b/(b@b);return c,b\\n def obj(r):\\n  c,b=fit(r);return np.sum((Z-c[:,None]*b)**2)\\n r=minimize_scalar(obj,bounds=(.3,1.5),method='bounded').x\\n return r,*fit(r)\\n\\ndef ridge_rat(X,U,Y,V,W,kind,reg=0.015):\\n F=design(X,2); G=design(U,2); d=V.shape[1]; cen=V.mean(0); V=V-cen;W=W-cen\\n def den(A,p):\\n  if kind=='rad':return 1+np.exp(p[0])*np.sum(A*A,axis=1)\\n  if kind=='diag':return 1+(A*A)@np.exp(p)\\n  return 1+(A@p[1:]+p[0])**2\\n def calc(p,ret=False):\\n  D=F/den(V,p)[:,None];a=np.linalg.lstsq(np.r_[D,np.eye(F.shape[1])*reg],np.r_[Y,np.zeros(F.shape[1])],rcond=None)[0]\\n  return G@a/den(W,p) if ret else np.r_[D@a-Y,reg*a,.012*p]\\n if kind=='rad':starts=[[-1.8],[-.6]]\\n elif kind=='diag':starts=[np.full(d,-2),np.full(d,-.5)]\\n else:starts=[np.r_[0,p] for p in np.eye(d)*.35]+[np.full(d+1,.15)]\\n b=min((least_squares(calc,p,max_nfev=100) for p in starts),key=lambda o:o.cost)\\n return calc(b.x,True)\\n\\nif __name__=='__main__':\\n for i,j in ss:\\n  ix=np.r_[i,j]; n=len(i); r,amp,b=amplitude(t,z[i]); G=group([sp['b'][ix]],'mixed'); H=group([sp['ab'][ix]],'smooth'); pa=.55*predict(x[i],x[j],amp,G)+.45*predict(x[i],x[j],amp,H)\\n  R=z[i]-amp[:,None]*b; _,_,vt=np.linalg.svd(R,full_matrices=False); v=vt[0]; cam=R@v; pc=predict(x[i],x[j],cam,G); B=np.c_[amp,cam]; Q=np.c_[pa,pc]; eta=np.linalg.lstsq(np.c_[np.ones(n),B],y[i],rcond=None)[0][1:];\\n  print('time',round(r,4),'state',*[round(np.abs(p-z[j]).mean(),5) for p in [pa[:,None]*b,pa[:,None]*b+pc[:,None]*v]],'eta',np.round(eta,3),flush=True)\\n  for shrink in (0,.6,1):\\n   yh=shrink*Q@eta+(.5*predict(x[i],x[j],y[i]-shrink*B@eta,group([sp['b'][ix]],'smooth'))+.5*predict(x[i],x[j],y[i]-shrink*B@eta,group([sp['ba'][ix]],'mixed')));print('joint',shrink,np.abs(yh-y[j]).mean(),end='; ')\\n  print();\\n  for k in ['x','a','ai','b','ba','ab']:\\n   out=[]\\n   for mode in ['rad','diag','rank1']:\\n    yh=ridge_rat(x[i],x[j],y[i],sp[k][i],sp[k][j],mode);out.append(np.abs(yh-y[j]).mean())\\n   print(k,np.round(out,5),end='; ')\\n  print(flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/joint.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 independent regularized readouts → H2 shared trajectory amplitudes and rational scalar readouts; the best fixed-split scalar MAE is 0.03117, while the panel-B smooth model has 0.05587 worst-slice scalar MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Choose the fixed-split scalar winner alone\",\"rejected_reason\":\"Its high-radius MAE is 0.10643, almost double that of the smoother panel-B model.\"}],\"rationale\":\"Test whether fitted trajectory amplitudes improve scalar generalization and whether explicit rational denominators lower extrapolation error. Neither test uses held-out trajectories as prediction inputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7723ffb8e006a223deec207ab0d746d626b1dd45af9fa115ac00e48ca7153c6f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37311.04,
+      "usage_known": true,
+      "prompt_tokens": 35999,
+      "cached_tokens": 9344,
+      "completion_tokens": 1377
+    }
+  ]
+}

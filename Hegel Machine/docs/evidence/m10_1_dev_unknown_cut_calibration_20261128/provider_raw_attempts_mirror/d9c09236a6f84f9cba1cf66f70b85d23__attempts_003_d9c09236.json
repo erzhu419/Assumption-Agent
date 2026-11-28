@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d9c09236a6f84f9cba1cf66f70b85d23",
+  "call_seq": 3,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:58:43.403082+00:00",
+  "ended_at_utc": "2026-11-28T07:59:11.449951+00:00",
+  "request_sha256": "6413ab288a5b0d1b50a604a8354c4ee05435db96123665b72ad98aec5ed81140",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 22037,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18726,
+    "cached_tokens": 0,
+    "completion_tokens": 1094
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport pickle,itertools,runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; old=runpy.run_path('/tmp/hegel_continual_archive/dev_m101_c04_batch_00_solver.py'); np.set_printoptions(precision=5,suppress=True,linewidth=150)\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef poly(x,n):return np.column_stack([np.prod(x[:,i],axis=1) for k in range(n+1) for i in itertools.combinations_with_replacement(range(x.shape[1]),k)])\\na=s['panel_a']; u,v=a['u'],a['v']; off,gain,m=old['_calibration'](s); print('old cal',off,gain); print('B gram',m[1:].T@m[1:]);\\nfor X in (aff(u),poly(u,2),poly(u,3)):\\n print('A basis',X.shape[1]);\\n for t in range(4):\\n  w=least_squares(lambda w:X@w-v[:,t],ls(X,v[:,t]),loss='soft_l1',f_scale=.0005).x;e=abs(X@w-v[:,t]); keep=e<max(.002,4*np.median(e)); print(t,'median,max,n clean',np.median(e),max(e),sum(keep),'coef',w[:15]);\\nprint('old A residual percentile',np.quantile(abs(u*gain+off-v),[0,.5,.75,.9,1],axis=0)); tr=s['train']; x=tr['x']; y=tr['y']; traj=tr['traj']; q=(x-off)/gain; z=aff(q)@m; p=s['panel_c'];\\nfor k in ('v1','v2'):\\n for X in (poly(p['u'],2),poly(p['u'],3),np.c_[aff(p['u']),p['u']**2,p['u']**3,np.sin(p['u']),np.cos(p['u'])]):\\n  w=ls(X,p[k]); print('C',k,X.shape[1],np.sqrt(np.mean((X@w-p[k])**2)), 'quadratic' if X.shape[1]==15 else '',w if X.shape[1]==15 else '')\\n def unused():pass\\nprint('stats',np.mean(traj[:,-1]),np.std(traj[:,-1]));\\nfor name,X in [('linear',aff(z)),('old',np.c_[z,old['_cross'](z)]),('intercept cross',np.c_[aff(z),old['_cross'](z)]),('quadratic',poly(z,2)),('cubic',poly(z,3)),('diagonal quad',np.c_[aff(z),z**2]),('pairs',np.c_[aff(z),*[z[:,i]*z[:,j] for i,j in itertools.combinations(range(4),2)]])]:\\n for Y in (y,traj):\\n  w=ls(X[:56],Y[:56]); print(name,Y.ndim,'train',np.mean(abs(X[:56]@w-Y[:56])),'test',np.mean(abs(X[56:]@w-Y[56:])),'coeff',w if Y.ndim==1 else w[:,-1])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation variable projection' 2>&1 | head -8\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived scalar cross term with two-mode relaxation -> H2 test missing algebraic terms and recover the uncontaminated calibration; baseline 56/16 MAEs are 0.083209 and 0.007087.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Treat the large panel A residuals as nonlinear response\",\"rejected_reason\":\"A few gross residuals can distort ordinary least squares; compare robust affine and polynomial fits before deciding.\"}],\"rationale\":\"Compare calibration residuals and held-out scalar and trajectory errors independently. If a compact interaction basis closes the scalar gap, retain the trajectory mechanism rather than replacing both outputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "8c99367dc776cc7abd5a2731ecc57cef3c6b13be47e9e49860a9f73e0863c560",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30525.27,
+      "usage_known": true,
+      "prompt_tokens": 18726,
+      "cached_tokens": 0,
+      "completion_tokens": 1094
+    }
+  ]
+}

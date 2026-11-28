@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ec14e36d5dcf403e81c99e3814b3350c",
+  "call_seq": 10,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__stageS__dev_m101_c04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:53:58.963251+00:00",
+  "ended_at_utc": "2026-11-28T07:54:25.514991+00:00",
+  "request_sha256": "807ac370da84ca15ea5941ca8cf9925186888ed889a00c6b2d2dda01256bed6e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52693,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30444,
+    "cached_tokens": 10880,
+    "completion_tokens": 999
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/final_margin.py <<'PY'\\nexec(open('/tmp/check_candidate.py').read().split('ys={')[0])\\nsplits += [(f'extrap{i}',np.argsort(z[:,i])[-8:]) for i in (0,1)]\\nsplits += [('leverage',np.argsort(np.sum((S@np.linalg.pinv(S.T@S))*S,axis=1))[-12:])]\\ncal=m._calibration(s); B=cal[2].copy(); U,sig,V=np.linalg.svd(B[1:]); B[1:]=sig.mean()*(U@V)\\nzp=m._coordinates(x,(*cal[:2],B)); P=np.c_[m._affine(zp),m._cross(zp)]\\nsc={k:[] for k in ('shared','scaled_orthogonal','half_intercept','no_intercept')}\\ntr={k:[] for k in ('exp2','blend_25','blend_50','affine')}\\nfor name,j in splits:\\n i=np.setdiff1d(np.arange(n),j)\\n y0=S[j]@m._ls(S[i],y[i]); yz=S[j,1:]@m._ls(S[i,1:],y[i]); yp=P[j]@m._ls(P[i],y[i]);\\n for key,pred in zip(sc,(y0,yp,(y0+yz)/2,yz)): sc[key].append(abs(pred-y[j]).mean())\\n ste=D[j]@m._relaxation(D[i],T[i],t); sta=D[j]@m._ls(D[i],T[i]);\\n for key,pred in zip(tr,(ste,.75*ste+.25*sta,(ste+sta)/2,sta)): tr[key].append(abs(pred-T[j]).mean(0))\\nfor key,vals in {**sc,**tr}.items():\\n a=np.asarray(vals); idx=np.unravel_index(a.argmax(),a.shape); print(key,'mean',a.mean(),'worst',a[idx],splits[idx[0]][0],idx[1:],'upper tails and leverage',a[-3:].reshape(3,-1).mean(1),'terminal worst',a[:,-1].max() if a.ndim==2 else '-')\\nprint('max scalar effect of scaled-orthogonal panel on public test',np.max(abs(np.c_[m._affine(test),m._cross(test)]@m._ls(S,y)-np.c_[m._affine(m._coordinates(s['test']['x'],(*cal[:2],B))),m._cross(m._coordinates(s['test']['x'],(*cal[:2],B)))]@m._ls(P,y))))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/final_margin.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated paired curvature and two relaxation modes -> H2 scaled-orthogonal panel calibration and a partially pooled trajectory fit if warranted; current worst held-out MAEs are 0.005588 for the scalar and 0.006549 across trajectory horizons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational or higher-order scalar terms\",\n      \"rejected_reason\": \"Nested selection increased worst-slice scalar MAE from 0.005588 to 0.006974 for rational terms and 0.006208 for added interactions.\"\n    }\n  ],\n  \"rationale\": \"Test two remaining practical failure modes: whether small departures from equal panel scale matter on the public test inputs, and whether the shared relaxation law sacrifices upper-tail or terminal-state accuracy. Compare both on identical slices before changing the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "da01d0c41abfd297a62b8c1b6dfab1cecb1cb7743e2dfff785966e545546d809",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28935.29,
+      "usage_known": true,
+      "prompt_tokens": 30444,
+      "cached_tokens": 10880,
+      "completion_tokens": 999
+    }
+  ]
+}

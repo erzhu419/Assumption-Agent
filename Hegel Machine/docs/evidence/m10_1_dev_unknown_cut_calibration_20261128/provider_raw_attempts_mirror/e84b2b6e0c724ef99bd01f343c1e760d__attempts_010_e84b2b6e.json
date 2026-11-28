@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e84b2b6e0c724ef99bd01f343c1e760d",
+  "call_seq": 10,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Fixed_TwoStage_Modular_Online__dev_m101_c02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:53:27.690317+00:00",
+  "ended_at_utc": "2026-11-28T08:54:02.351890+00:00",
+  "request_sha256": "1f018de74abee016ad556918bce6e95cbf06987dc3465004ba81d1c5163efe40",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67771,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39257,
+    "cached_tokens": 9344,
+    "completion_tokens": 1372
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/bench10.py <<'PY'\\nfrom maps import *\\nfrom refine import mapB\\nfrom odd import fit as oddfit\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\nfrom itertools import combinations\\ntr=s['train']; n=len(tr['x']); z=inv(tr['x'],calfit(s)); b=s['panel_b'];u,v=b['u'],b['v']; Y=np.c_[tr['y'],tr['traj']];\\n\\ndef splineB(u,v,k,lam=.001):\\n def des(x):return np.c_[bias(x),x**3,np.sign(x).reshape(-1,4,1).__mul__(np.maximum(abs(x)[...,None]-np.asarray(k),0)**3).reshape(len(x),-1)]\\n F=des(u); d=np.maximum(F.std(0),.003);d[0]=1; F=F/d; C=solve(F.T@F+lam*np.diag([0]+[1]*(F.shape[1]-1)),F.T@v,assume_a='pos'); return lambda x:des(x)/d@C\\n\\ndef gen():\\n yield 'rat',mapB(u,v,'rat','wide')[0];yield 'tanhall',fitB_all();yield 'atan',oddfit(u,v,'atan','poly')[-1];\\n for l in [.00003,.001,.03]:yield 'spline'+str(l),splineB(u,v,[.25,.55,.85],l)\\n\\ndef fitB_all():\\n from refine import fitB\\n return fitB(u,v,'tanh',3.0,'all')\\n\\ndef kernels(w,z):\\n q=w/.5; t=z/.65; dot=q@q.T/4; d=cdist(q,q,'sqeuclidean')/4; dd=cdist(t,t,'sqeuclidean')/4; quad=dot**2\\n yield 'lin',1+dot;yield 'quad',1+dot+quad\\n for g in [.3,1,3]:\\n  add=np.exp(-g*(q[:,None,:]-q[None,:,:])**2).mean(2);\\n  for name,r in [('full',np.exp(-g*d)),('raw',np.exp(-g*dd)),('add',add),('mix',(np.exp(-g*d)+np.exp(-g*dd)+add)/3)]:\\n   for h in [.03,.3,2]: yield f'{name}/{g}/{h}',1+dot+h*r\\n  for h in [.1,1]:yield f'rq/{g}/{h}',1+dot+h/(1+g*d)\\n for h in [.1,1]:yield f'cubic/{h}',1+dot+quad+h*dot**3\\n\\nif __name__=='__main__':\\n ss=[np.arange(n)]+[np.random.default_rng(k).permutation(n) for k in range(10)];rs=[]\\n for tag,f in gen():\\n  w=f(z); print('map',tag,'rmse',np.mean((f(u)-v)**2)**.5,'range',w.min(),w.max())\\n  for k,K in kernels(w,z):\\n   for l in [.0003,.003,.03,.15]:\\n    out=[]\\n    for sp in ss:\\n     i,j=sp[:56],sp[56:];p=K[np.ix_(j,i)]@solve(K[np.ix_(i,i)]+l*np.eye(len(i)),Y[i],assume_a='pos'); e=np.abs(p-Y[j]);out.append([e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean()])\\n    e=np.array(out);rs.append((tag,k,l,e.mean(0),e.max(0),e[0]))\\n for j in range(3):\\n  print('Best target',j)\\n  for r in sorted(rs,key=lambda r:.55*r[3][j]+.45*r[4][j])[:14]:print(r[:3],*[x.round(5) for x in r[3:]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bench10.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (fixed panel B links and low-order readouts) -> H2 (test flexible odd panel B maps and regularized residual readouts); prior six-split worst MAEs are 0.132 for scalar and 0.140 for trajectory amplitude.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select by panel fit alone\",\"rejected_reason\":\"The previous link ranking did not reliably predict downstream scalar or trajectory accuracy.\"}],\"rationale\":\"Compare linear, quadratic, and regularized residual readouts on identical splits. This tests whether either output benefits from remaining nonlinear structure without selecting on the first 56/16 split alone.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "46f9b94f38db3d3ab59181f251b974623ac13f17622b03a2f9c24055e564ca72",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37197.48,
+      "usage_known": true,
+      "prompt_tokens": 39257,
+      "cached_tokens": 9344,
+      "completion_tokens": 1372
+    }
+  ]
+}

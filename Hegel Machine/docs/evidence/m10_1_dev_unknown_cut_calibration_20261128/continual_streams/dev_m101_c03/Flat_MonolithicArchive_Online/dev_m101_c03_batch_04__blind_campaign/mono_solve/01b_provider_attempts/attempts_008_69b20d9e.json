@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "69b20d9ef5134cc5ac4e77a64947b713",
+  "call_seq": 8,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c03__Flat_MonolithicArchive_Online__dev_m101_c03_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c03_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:18:08.636694+00:00",
+  "ended_at_utc": "2026-11-28T08:18:31.990881+00:00",
+  "request_sha256": "8bec09044072fad066d256e7e3a742ff36638cd1df289c21304ad1404839d147",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55616,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32711,
+    "cached_tokens": 9344,
+    "completion_tokens": 888
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\ns = pickle.load(open('public_batch.pkl','rb'))[0]['study']\\nd = s['train']; n = len(d['x']); ix = np.arange(n)\\np = s['panel_c']; u = p['u']; fit = m['_fit']\\nfor name, cols in [('affine',u),('pairwise',np.column_stack([u[:,i]*u[:,j] for i,j in [(0,1),(0,3),(1,2),(2,3)]]))]:\\n    A = np.column_stack((np.ones(len(u)),cols)); err=[]\\n    for te in np.array_split(np.arange(len(u)),4):\\n        tr = np.setdiff1d(np.arange(len(u)),te); err.append(np.sqrt(np.mean((A[te]@fit(A[tr],p['v1'][tr])-p['v1'][te])**2)))\\n    print('panel v1',name,'worst held-out RMSE',max(err))\\nslices = [('56/16',ix[56:]), ('high-radius',np.argsort(np.linalg.norm(d['x']-d['x'].mean(0),axis=1))[-16:])]\\nslices += [(f'fold-{i+1}',te) for i,te in enumerate(np.array_split(np.random.default_rng(51).permutation(n),5))]\\nfor name,te in slices:\\n    tr = np.setdiff1d(ix,te)\\n    out = m['solve_batch']({**s,'train':{**d,**{k:d[k][tr] for k in ('x','y','traj')}}, 'test':{'x':d['x'][te]}})\\n    y,z,g = (out[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\n    np.testing.assert_allclose(g,[y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()]); assert np.isfinite(y).all() and np.isfinite(z).all()\\n    ey = np.abs(y-d['y'][te]).mean(); ez = np.abs(z-d['traj'][te]); et = ez.mean(0).max()\\n    print(f'{name}: y MAE={ey:.6f}, state MAE={ez.mean():.6f}, worst timestamp MAE={et:.6f}')\\n    assert max(ey,et)<0.01\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared dot product alone -> H2 explicit A₀B₁ coupling in the two-mode trajectory; the sparse design's worst slice MAEs were 0.005601 for y and 0.004325 for state, with worst timestamp MAE 0.005644.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The previous slice checks fitted the solver's components separately. Exercise the saved entry point end to end on those slices to detect integration errors, and check the pairwise panel basis on withheld calibration rows to rule out an in-sample-only improvement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "8cce9f969fea268828f49ae7efd495768a4485ae9fa099392310b7bc3a7692a4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25806.76,
+      "usage_known": true,
+      "prompt_tokens": 32711,
+      "cached_tokens": 9344,
+      "completion_tokens": 888
+    }
+  ]
+}

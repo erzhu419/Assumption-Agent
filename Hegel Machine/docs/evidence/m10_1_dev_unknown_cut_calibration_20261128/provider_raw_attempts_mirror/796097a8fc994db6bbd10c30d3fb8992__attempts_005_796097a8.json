@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "796097a8fc994db6bbd10c30d3fb8992",
+  "call_seq": 5,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c04__Flat_MonolithicArchive_Online__dev_m101_c04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m101_c04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:00:02.324056+00:00",
+  "ended_at_utc": "2026-11-28T08:00:41.964858+00:00",
+  "request_sha256": "48c064c74b53a5f05bd3721f53a31219db4cb6d9c2d50807bdb8ab7dccb0940b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44598,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28713,
+    "cached_tokens": 9344,
+    "completion_tokens": 1600
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/latent.py <<'PY'\\nimport pickle,runpy,itertools\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; old=runpy.run_path('/tmp/hegel_continual_archive/dev_m101_c04_batch_00_solver.py')\\nnp.set_printoptions(precision=4,suppress=True,linewidth=140)\\ndef ls(X,Y):return np.linalg.lstsq(X,Y,rcond=None)[0]\\ndef aff(X):return np.c_[np.ones(len(X)),X]\\ndef ga(x):return np.exp(-x*x)-1\\ndef rat(x):return x/(1+x*x)\\ndef hinge(x):return np.maximum(x,0)\\ncal=old['_calibration'](s); x=s['train']['x']; q=(x-cal[0])/cal[1]; z=old['_coordinates'](x,cal); c=old['_cross'](z); y=s['train']['y']; C=s['panel_c']; u=C['u']\\n# The second output is nearly affine plus a rational square; profile each channel's shape independently.\\nfor key, families in [('v1',{'tanh':np.tanh,'sin':np.sin,'rat':rat,'atan':np.arctan,'erf':__import__('scipy').special.erf}),('v2',{'evenrat':lambda t:t*t/(1+t*t),'cos':np.cos,'gauss':ga})]:\\n for name,f in families.items():\\n  for shift in (False,True):\\n   def panel(p,u):return aff(u) if len(p)==0 else np.c_[aff(u),f(u*np.exp(p[:4])+ (p[4:] if shift else 0))]\\n   def err(p):\\n    X=panel(p,u);return (X@ls(X,C[key])-C[key]).ravel()\\n   n=8 if shift else 4; lo=np.r_[np.repeat(-1.8,4),np.repeat(-1.,n-4)]; hi=np.r_[np.repeat(1.7,4),np.repeat(1.,n-4)]\\n   fits=[least_squares(err,np.r_[np.full(4,k),np.zeros(n-4)],bounds=(lo,hi),max_nfev=120) for k in (-.4,.4,1.1)]; r=min(fits,key=lambda r:r.cost)\\n   loo=[]\\n   for i in range(len(u)):\\n    idx=np.arange(len(u))!=i\\n    def e(p):\\n     X=panel(p,u[idx]);return (X@ls(X,C[key][idx])-C[key][idx]).ravel()\\n    f0=least_squares(e,r.x,bounds=(lo,hi),max_nfev=60); X=panel(f0.x,u);loo.extend((X[i]@ls(X[idx],C[key][idx])-C[key][i]).tolist())\\n   print(key,name,shift,'fit/LOO',np.sqrt(np.mean(err(r.x)**2)),np.sqrt(np.mean(np.square(loo))), 'scale',np.exp(r.x[:4]),'shift',r.x[4:])\\n# Fit scalar ridge features by variable projection; restart and select on fitted rows only.\\nrng=np.random.default_rng(125); folds=[(np.arange(56),np.arange(56,72))]+[(p[:56],p[56:]) for p in [rng.permutation(72) for _ in range(4)]]\\nstarts=np.r_[np.eye(4),-np.eye(4),[np.eye(4)[i]+sg*np.eye(4)[j] for i,j in itertools.combinations(range(4),2) for sg in (1,-1)],rng.normal(size=(8,4))]\\nfor label,B in [('cross',np.c_[aff(z),c]),('quad',np.c_[aff(z),*[z[:,i]*z[:,j] for i,j in itertools.combinations_with_replacement(range(4),2)]])]:\\n for name,f in [('sin',np.sin),('tanh',np.tanh),('rational',rat),('cos',np.cos),('gauss',ga),('hinge',hinge)]:\\n  scores=[]; details=[]\\n  for a,b in folds:\\n   def des(p,I):return np.c_[B[I], f(z[I]@p[:4]+p[4])]\\n   def fit(p):\\n    X=des(p,a);return X@ls(X,y[a])-y[a]\\n   init=[np.r_[v*k,d] for v in starts for k,d in ((1.7,0),(3.,.8))]; sol=min((least_squares(fit,p,bounds=(-10,10),max_nfev=90) for p in init),key=lambda r:r.cost); w=ls(des(sol.x,a),y[a]);scores.append(np.mean(abs(des(sol.x,b)@w-y[b])));details.append((np.sqrt(2*sol.cost/len(a)),sol.x,w[-1]));\\n  print(label,name,'CV',np.round(scores,5),'train rmse, p, amplitude',details[:2],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -u /tmp/latent.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separate affine trajectory and nonlinear scalar heads -> H2 test identifiable panel nonlinearities and a compact latent-direction scalar term; the archived scalar basis reached 0.09274 worst 56/16 split MAE, while the no-intercept affine trajectory reached 0.00419 on the canonical split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the current surrogate fits of panel C directly\",\n      \"rejected_reason\": \"They did not improve scalar holdouts, and the panel residuals leave open whether the operator itself was estimated accurately.\"\n    }\n  ],\n  \"rationale\": \"Distinguish a compact latent-direction response from generic polynomial improvement. Fit scalar directions separately within each split and check panel operator extrapolation; if fitted directions are unstable or panel errors remain above noise, do not use those operators in the solver. Retain the direct affine trajectory baseline, which beat the archived relaxation on both measured splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "0e894ed2ba161909510692dd1e59d89657ab3095c8f595e1af0d5ef46a93466b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42184.34,
+      "usage_known": true,
+      "prompt_tokens": 28713,
+      "cached_tokens": 9344,
+      "completion_tokens": 1600
+    }
+  ]
+}

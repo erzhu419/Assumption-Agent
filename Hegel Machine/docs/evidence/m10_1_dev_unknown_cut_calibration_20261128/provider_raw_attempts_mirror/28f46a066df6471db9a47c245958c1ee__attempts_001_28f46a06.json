@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "28f46a066df6471db9a47c245958c1ee",
+  "call_seq": 1,
+  "stage_subdir": "m101_dev_20261128T074929Z_da6c9471__dev_m101_c02__Fixed_TwoStage_Modular_Online__init_decomp_dev_m101_c02_batch_01",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T07:58:02.133866+00:00",
+  "ended_at_utc": "2026-11-28T07:58:28.752226+00:00",
+  "request_sha256": "120bbfd362c7f47a4757919486b6eae3c57407d6a8f45285c1da7cd71c4d320f",
+  "system_prompt_chars": 2229,
+  "stdin_payload_chars": 4431,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 12955,
+    "cached_tokens": 0,
+    "completion_tokens": 1020
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"Split coordinate calibration and transformation from the scalar and trajectory readouts. Panel A’s fit statistics are nearly unchanged, while panel B’s linear R² drops from 1.000 to 0.875 and its quadratic gain rises to 0.125. That makes the panel B mapping the first part to revisit, without changing either readout. The split preserves the source formulas and leaves panel C unused, as in the original solver. Source-batch equivalence has not been run in Docker.\",\n  \"nodes\": [\"node_00\", \"node_01\"],\n  \"edges\": [[\"__input__\", \"node_00\"], [\"__input__\", \"node_01\"], [\"node_00\", \"node_01\"]],\n  \"sink_node_id\": \"node_01\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    a = study['panel_a']\\n    good = np.max(np.abs(a['v'] - a['u']), axis=1) < 1.0\\n    u, v = a['u'][good], a['v'][good]\\n    centered = u - u.mean(axis=0)\\n    gain = np.sum(centered * (v - v.mean(axis=0)), axis=0) / np.sum(centered**2, axis=0)\\n    offset = v.mean(axis=0) - gain * u.mean(axis=0)\\n\\n    b = study['panel_b']\\n    design = np.column_stack((np.ones(len(b['u'])), b['u']))\\n    operator = np.linalg.lstsq(design, b['v'], rcond=None)[0]\\n\\n    def coordinates(x):\\n        return (x - offset) / gain @ operator[1:] + operator[0]\\n\\n    return {'z_tr': coordinates(study['train']['x']),\\n            'z_te': coordinates(study['test']['x'])}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _fit(design, target):\\n    return np.linalg.lstsq(design, target, rcond=None)[0]\\n\\n\\ndef _scalar_design(z):\\n    interaction = z[:, 0] * z[:, 2] + z[:, 1] * z[:, 3]\\n    return np.column_stack((z, interaction))\\n\\n\\ndef _trajectory(x, target, x_test, t):\\n    def basis(rates):\\n        return -np.expm1(-t[:, None] * rates)\\n\\n    def residual(rates):\\n        b = basis(rates)\\n        return (b @ _fit(b, target.T) - target.T).ravel()\\n\\n    rates = least_squares(residual, [0.4, 1.8], bounds=([0.01, 0.8], [0.8, 8.0])).x\\n    b = basis(rates)\\n    return (x_test @ _fit(x, _fit(b, target.T).T)) @ b.T\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train = study['train']\\n    coords = inputs['node_00']\\n    x, x_test = coords['z_tr'], coords['z_te']\\n    y_hat = _scalar_design(x_test) @ _fit(_scalar_design(x), train['y'])\\n    state_pred = _trajectory(x, train['traj'], x_test, study['eval_times'])\\n    end = state_pred[:, -1]\\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), end.mean(), end.std()])\\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': diagnostics}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "d7401b068b53a2fbc9b3198a22b12a2e1f3d7ffce36df169cdd5566aebc7c9ef",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29049.1,
+      "usage_known": true,
+      "prompt_tokens": 12955,
+      "cached_tokens": 0,
+      "completion_tokens": 1020
+    }
+  ]
+}
